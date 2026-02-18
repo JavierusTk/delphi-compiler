@@ -7,7 +7,7 @@
 - Preserve `OutputPath` in JSON when output is stale (was being cleared to empty)
 - `OutputMessage` is now a record field instead of a hardcoded string
 
-## v1.0 - 2025-06-07
+## v1.0 - 2026-02-16
 
 - Initial release: Delphi compilation wrapper with JSON output
 - MSBuild invocation with configurable Debug/Release and Win32/Win64
