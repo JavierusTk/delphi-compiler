@@ -89,7 +89,10 @@ begin
         if OutputFileTime < CompileStartTime then
         begin
           Result.OutputStale := True;
-          Result.OutputPath := '';  // Don't report stale output as valid
+          Result.OutputMessage := 'Compilation succeeded but the output file was NOT updated (locked by another process). Restart the application and recompile.';
+          // Override status: compilation was fine, the problem is the locked output
+          if Result.ErrorCount = 0 then
+            Result.Status := 'output_locked';
         end;
       end;
     end;

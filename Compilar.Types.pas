@@ -65,6 +65,7 @@ type
     Platform: string;
     OutputPath: string;        // Path to compiled binary (Linux format)
     OutputStale: Boolean;      // True if output file was not updated (likely locked)
+    OutputMessage: string;     // Human-readable explanation when OutputStale
     TimeMs: Int64;
     ExitCode: Integer;         // MSBuild exit code
     ErrorCount: Integer;

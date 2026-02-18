@@ -217,7 +217,8 @@ begin
       if AResult.OutputStale then
       begin
         SB.Append(P1).Append('"output_stale": true,').Append(NL);
-        SB.Append(P1).Append('"output_message": "Output file was NOT updated (likely locked by another process). The existing file is from a previous build. Release the lock and recompile.",').Append(NL);
+        if AResult.OutputMessage <> '' then
+          SB.Append(P1).Append('"output_message": "').Append(EscapeJSON(AResult.OutputMessage)).Append('",').Append(NL);
       end;
     end;
 
