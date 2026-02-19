@@ -134,6 +134,30 @@ WSL=true
 
 Settings can also be provided as environment variables (environment variables take precedence over the `.env` file).
 
+### Multiple Delphi versions
+
+To select a specific RAD Studio version, set `RSVARS_PATH` to its `rsvars.bat`. If only one version is installed, it is auto-detected. If multiple are found, you must set the path explicitly.
+
+| Delphi | Codename | Studio version |
+|--------|----------|---------------|
+| 13 | Florence | 37.0 |
+| 12 | Athens | 23.0 |
+| 11 | Alexandria | 22.0 |
+| 10.4 | Sydney | 21.0 |
+| 10.3 | Rio | 20.0 |
+
+Example for Delphi 11:
+
+```env
+RSVARS_PATH=C:\Program Files (x86)\Embarcadero\Studio\22.0\bin\rsvars.bat
+```
+
+Or as a one-off environment variable:
+
+```bash
+RSVARS_PATH='C:\Program Files (x86)\Embarcadero\Studio\22.0\bin\rsvars.bat' delphi-compiler.exe MyProject.dproj
+```
+
 ## Optional integrations
 
 ### delphi-lookup
