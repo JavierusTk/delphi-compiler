@@ -24,7 +24,7 @@ implementation
 
 uses
   System.SysUtils, System.RegularExpressions, System.Classes,
-  System.Generics.Collections,
+  System.JSON, System.Generics.Collections,
   Winapi.Windows,
   Compilar.PathUtils,
   Compilar.Config;
@@ -187,8 +187,8 @@ begin
     Exit;
   end;
 
-  // Build command line: delphi-lookup.exe "Symbol" -n 3
-  CommandLine := Format('"%s" "%s" -n 3', [LookupExe, Symbol]);
+  // Build command line: delphi-lookup.exe "Symbol" -n 3 --json
+  CommandLine := Format('"%s" "%s" -n 3 --json', [LookupExe, Symbol]);
 
   // Set up security attributes for pipe inheritance
   FillChar(SA, SizeOf(SA), 0);
@@ -267,12 +267,12 @@ end;
 
 class function TLookupEnricher.ParseLookupOutput(const Output, Symbol: string): TLookupResult;
 var
-  Lines: TStringList;
+  Root: TJSONObject;
+  ResultsArr: TJSONArray;
+  ResultObj: TJSONObject;
   I: Integer;
-  Line, NextLine: string;
   Entry: TLookupEntry;
   ResultList: TList<TLookupEntry>;
-  TypeMatch, FileMatch: TMatch;
 begin
   Result.Found := False;
   Result.Symbol := Symbol;
@@ -285,58 +285,50 @@ begin
     Exit;
   end;
 
-  // Check for "No results found" message
-  if Pos('No results found', Output) > 0 then
+  // Parse JSON output from delphi-lookup --json
+  try
+    Root := TJSONObject.ParseJSONValue(Trim(Output)) as TJSONObject;
+  except
+    Result.Hint := 'Failed to parse delphi-lookup JSON output.';
+    Exit;
+  end;
+
+  if Root = nil then
   begin
-    Result.Hint := 'Symbol not in index. May be new, misspelled, or in non-indexed folder.';
+    Result.Hint := 'Invalid JSON from delphi-lookup.';
     Exit;
   end;
 
   ResultList := TList<TLookupEntry>.Create;
-  Lines := TStringList.Create;
   try
-    Lines.Text := Output;
-
-    // Parse delphi-lookup output format:
-    // // Result 1 (Exact Match - USER CODE): ModoDesarrollo (function)
-    // // File: TableMax.pas
-
-    for I := 0 to Lines.Count - 2 do  // -2 because we look ahead
+    if not Root.GetValue<Boolean>('found', False) then
     begin
-      Line := Lines[I];
+      Result.Hint := 'Symbol not in index. May be new, misspelled, or in non-indexed folder.';
+      Exit;
+    end;
 
-      // Look for "// Result N" lines
-      if Pos('// Result ', Line) > 0 then
+    ResultsArr := Root.GetValue('results') as TJSONArray;
+    if (ResultsArr = nil) or (ResultsArr.Count = 0) then
+    begin
+      Result.Hint := 'Symbol not in index. May be new, misspelled, or in non-indexed folder.';
+      Exit;
+    end;
+
+    for I := 0 to ResultsArr.Count - 1 do
+    begin
+      ResultObj := ResultsArr.Items[I] as TJSONObject;
+
+      Entry.SymbolType := ResultObj.GetValue<string>('type', 'unknown');
+      Entry.UnitName := ResultObj.GetValue<string>('unit', '');
+      Entry.Path := ResultObj.GetValue<string>('file', '');
+      Entry.Line := ResultObj.GetValue<Integer>('line', 0);
+
+      // Only add if we have a unit name
+      if Entry.UnitName <> '' then
       begin
-        Entry.Path := '';
-        Entry.Line := 0;
-        Entry.SymbolType := 'unknown';
-        Entry.UnitName := '';
-
-        // Extract type from parentheses at end: (function), (procedure), etc.
-        TypeMatch := TRegEx.Match(Line, '\((\w+)\)\s*$');
-        if TypeMatch.Success then
-          Entry.SymbolType := LowerCase(TypeMatch.Groups[1].Value);
-
-        // Look for "// File: xxx.pas" in next few lines
-        if I + 1 < Lines.Count then
-        begin
-          NextLine := Lines[I + 1];
-          FileMatch := TRegEx.Match(NextLine, '//\s*File:\s*([A-Za-z0-9_.\-]+\.pas)', [roIgnoreCase]);
-          if FileMatch.Success then
-          begin
-            Entry.Path := FileMatch.Groups[1].Value;
-            Entry.UnitName := ChangeFileExt(Entry.Path, '');
-          end;
-        end;
-
-        // Only add if we found a file
-        if Entry.UnitName <> '' then
-        begin
-          ResultList.Add(Entry);
-          if ResultList.Count >= 3 then
-            Break;
-        end;
+        ResultList.Add(Entry);
+        if ResultList.Count >= 3 then
+          Break;
       end;
     end;
 
@@ -346,12 +338,10 @@ begin
       Result.Results := ResultList.ToArray;
     end
     else
-    begin
       Result.Hint := 'Symbol not in index. May be new, misspelled, or in non-indexed folder.';
-    end;
   finally
-    Lines.Free;
     ResultList.Free;
+    Root.Free;
   end;
 end;
 
