@@ -1,0 +1,14 @@
+# Normalize line endings across platforms.
+# Delphi source/project files are CRLF (the Delphi IDE writes CRLF natively).
+*.pas    text eol=crlf
+*.dpr    text eol=crlf
+*.dpk    text eol=crlf
+*.dproj  text eol=crlf
+*.inc    text eol=crlf
+*.dfm    text eol=crlf
+
+# Docs and misc default to LF.
+*.md         text eol=lf
+.gitignore   text eol=lf
+.gitattributes text eol=lf
+LICENSE      text eol=lf
