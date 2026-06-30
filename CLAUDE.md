@@ -59,7 +59,7 @@ Events are executed via a temp `.bat` file (PID-unique name) in the project dire
 | `hints` | Compiled successfully, only hints |
 | `warnings` | Compiled successfully, warnings present |
 | `error` | Compilation failed |
-| `output_locked` | Compiled OK but output file locked by another process |
+| `output_locked` | **NOT a successful build.** Output binary locked by another process → `/t:rebuild` Clean failed, build aborted **before compiling**, sources **NOT compiled** (`errors:0` does not mean the code compiles). Also printed as a `[delphi-compiler] NOT A BUILD …` line on **stderr**. |
 | `prebuild_error` | PreBuild event failed (compilation not attempted) |
 | `invalid` | Bad command-line arguments |
 | `internal_error` | Unexpected failure |

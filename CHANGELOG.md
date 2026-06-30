@@ -1,5 +1,12 @@
 ﻿# Changelog
 
+## v1.6 - 2026-06-30
+
+- **Fix misleading `output_locked` semantics + message.** MSBuild is invoked with `/t:rebuild`, so a locked output binary makes the **Clean** step fail (it cannot delete the `.bpl`/`.exe` held by a running process) and the build **aborts before the Build/compile step** — *nothing is compiled* and the parser sees 0 Delphi errors. The old `output_message` ("Compilation succeeded but the output file was NOT updated") was wrong: compilation did **not** happen, and `errors:0` certifies nothing.
+- `output_message` now states plainly that this is NOT a successful build and that the sources were not compiled.
+- A one-line `[delphi-compiler] NOT A BUILD …` warning is now written to **stderr** on `output_locked`, so the failure survives sessions that pipe stdout through a minimizer reporting only the error count.
+- Status string `output_locked` unchanged (back-compat). Rule for consumers: **a pass is `status ∈ {ok, warnings, hints}`** — never infer success from `errors:0` alone (`output_locked`, `prebuild_error`, `invalid`, and `internal_error` all carry `errors:0` without a successful compile).
+
 ## v1.5 - 2026-04-20
 
 - Fix mixed-slash Windows path handling in argument parser (`Compilar.Args.pas`)

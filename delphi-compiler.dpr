@@ -136,8 +136,11 @@ begin
         if OutputFileTime < CompileStartTime then
         begin
           Result.OutputStale := True;
-          Result.OutputMessage := 'Compilation succeeded but the output file was NOT updated (locked by another process). Restart the application and recompile.';
-          // Override status: compilation was fine, the problem is the locked output
+          Result.OutputMessage := 'NOT A SUCCESSFUL BUILD. The output binary is locked by another process, so MSBuild /t:rebuild could not delete it in the Clean step and aborted BEFORE compiling: the sources were NOT compiled. "errors":0 here is meaningless (no compilation ran). Close the process holding the output (or free the file) and recompile to get a real result.';
+          // NOT a success: with /t:rebuild a locked output makes the Clean step fail,
+          // so the Build target never runs and NOTHING is compiled. Flag it distinctly,
+          // but callers must NOT read output_locked as a clean compile: errors=0 here
+          // means "nothing was compiled", not "compiled with no errors".
           if Result.ErrorCount = 0 then
             Result.Status := 'output_locked';
         end;
@@ -154,6 +157,13 @@ begin
       LEventResult := TBuildEvents.Execute(LPostBuildCmd, LProjectDir);
       Result.PostBuildEvent := LEventResult;
     end;
+
+    // 7e. Loud stderr line for the deceptive zero-error non-build (output_locked).
+    //     Sessions VERY often pipe stdout through an inline minimizer that prints only
+    //     the error count; that hides output_locked (errors:0 but NOTHING compiled).
+    //     stderr is not consumed by a stdout-only pipe, so this survives the pattern.
+    if Result.Status = 'output_locked' then
+      WriteStderr('[delphi-compiler] NOT A BUILD (status=output_locked): output binary locked by another process; MSBuild /t:rebuild Clean aborted before compiling, so NOTHING was compiled. "errors":0 is meaningless here. Free the lock (close the running app) and recompile.');
 
     // 8. Output JSON
     WriteStdout(TJSONOutput.Generate(Result));
