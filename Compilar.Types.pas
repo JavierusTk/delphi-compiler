@@ -51,6 +51,8 @@ type
     ContextLines: Integer;    // Lines of context around error (default 5)
     RawOutput: Boolean;       // Echo raw MSBuild output to stderr
     WSLMode: Boolean;         // Output Linux paths (--wsl flag)
+    WorkspaceRoot: string;    // --workspace=ROOT: redirect ALL outputs under ROOT\out (cmx-workspace slots)
+    RebuildCanonical: Boolean;// --rebuild-canonical: use /t:rebuild (default is /t:build since workspace mode)
 
     function ConfigStr: string;
     function PlatformStr: string;
@@ -95,10 +97,20 @@ type
 function IssueTypeToStr(T: TIssueType): string;
 function StrToIssueType(const S: string): TIssueType;
 
+/// Per-process scratch dir for --test mode (PID-suffixed: two concurrent
+/// --test runs must not clean each other's output). Shared by MSBuild and
+/// ProjectInfo so the path is defined exactly once.
+function TestScratchDir: string;
+
 implementation
 
 uses
-  System.SysUtils, System.IOUtils;
+  System.SysUtils, System.IOUtils, Winapi.Windows;
+
+function TestScratchDir: string;
+begin
+  Result := 'W:\temp\compilar\' + IntToStr(GetCurrentProcessId);
+end;
 
 function TCompilerArgs.ConfigStr: string;
 begin

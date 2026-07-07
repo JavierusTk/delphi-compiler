@@ -16,6 +16,7 @@ type
 
   private
     class function GetRSVarsPath: string;
+    class function BuildWorkspaceSearchPath(const Root: string): string;
     class function BuildCommandLine(const Args: TCompilerArgs): string;
     class function RunProcess(const CommandLine: string;
       out Output: string; out ExitCode: Integer; TimeoutMs: Cardinal): Boolean;
@@ -29,7 +30,6 @@ uses
   Compilar.Config;
 
 const
-  TEMP_OUTPUT_DIR = 'W:\temp\compilar';
   MSBUILD_TIMEOUT_MS = 300000; // 5 minutes
 
 class function TMSBuildRunner.GetRSVarsPath: string;
@@ -41,33 +41,101 @@ begin
     raise Exception.Create('rsvars.bat not found at: ' + Result);
 end;
 
+class function TMSBuildRunner.BuildWorkspaceSearchPath(const Root: string): string;
+var
+  SR: TSearchRec;
+  Attrs: DWORD;
+  Name: string;
+begin
+  // out\DCP\290 first (intra-workspace DCP cascade), then every REAL directory
+  // at ROOT level (worktrees of the edit-set; junctions are reparse points and
+  // resolve from the canonical registry Library Path anyway).
+  Result := Root + '\out\DCP\290';
+  if FindFirst(Root + '\*', faDirectory, SR) = 0 then
+  begin
+    try
+      repeat
+        Name := SR.Name;
+        if (Name = '.') or (Name = '..') or (Name = 'out') or Name.StartsWith('.') or
+           SameText(Name, 'Packages290') then
+          Continue;
+        if (SR.Attr and faDirectory) = 0 then
+          Continue;
+        Attrs := GetFileAttributes(PChar(Root + '\' + Name));
+        if (Attrs <> INVALID_FILE_ATTRIBUTES) and ((Attrs and FILE_ATTRIBUTE_REPARSE_POINT) <> 0) then
+          Continue; // junction => canonical baseline, not worktree source
+        Result := Result + ';' + Root + '\' + Name;
+      until FindNext(SR) <> 0;
+    finally
+      System.SysUtils.FindClose(SR);
+    end;
+  end;
+end;
+
 class function TMSBuildRunner.BuildCommandLine(const Args: TCompilerArgs): string;
 var
   RSVars: string;
   ExtraProps: string;
   EnvProps: string;
+  Target: string;
+  ScratchDir: string;
+  OutRoot: string;
 begin
   RSVars := GetRSVarsPath;
   ExtraProps := '';
 
-  // If test mode, redirect output to temp folder
+  // Default target is /t:build. /t:rebuild's Clean step deletes shared
+  // canonical artifacts (reproduced empirically: it deleted W:\DCP\290\*.dcp)
+  // and is only allowed with the explicit --rebuild-canonical flag.
+  if Args.RebuildCanonical then
+    Target := 'rebuild'
+  else
+    Target := 'build';
+
+  // If test mode, redirect output to a per-process temp folder (PID suffix:
+  // two concurrent --test runs must not clean each other's scratch).
   if Args.TestMode then
   begin
-    // Create/clean temp directory
-    if DirectoryExists(TEMP_OUTPUT_DIR) then
+    ScratchDir := TestScratchDir;
+    if DirectoryExists(ScratchDir) then
     begin
       try
-        TDirectory.Delete(TEMP_OUTPUT_DIR, True);
+        TDirectory.Delete(ScratchDir, True);
       except
         // Ignore deletion errors
       end;
     end;
-    ForceDirectories(TEMP_OUTPUT_DIR);
+    ForceDirectories(ScratchDir);
 
     ExtraProps := Format(
       '/p:DCC_ExeOutput="%s" /p:DCC_UnitOutputDirectory="%s" ' +
       '/p:DCC_BplOutput="%s" /p:DCC_DcpOutput="%s"',
-      [TEMP_OUTPUT_DIR, TEMP_OUTPUT_DIR, TEMP_OUTPUT_DIR, TEMP_OUTPUT_DIR]);
+      [ScratchDir, ScratchDir, ScratchDir, ScratchDir]);
+  end;
+
+  // Workspace mode (cmx-workspace slot): ALL outputs under ROOT\out — the
+  // explicit /p: globals are what isolates the .dproj that do not import the
+  // shared optset. DCC_UnitSearchPath is seeded as an ENVIRONMENT variable
+  // (never /p:, which would REPLACE the project's own relative search path);
+  // --depends leaves ROOT\out\DCP\290\<Proj>.d for provenance asserts.
+  if Args.WorkspaceRoot <> '' then
+  begin
+    OutRoot := Args.WorkspaceRoot + '\out';
+    ForceDirectories(OutRoot + '\BPL\290');
+    ForceDirectories(OutRoot + '\DCP\290');
+    ForceDirectories(OutRoot + '\DCU\290');
+    ForceDirectories(OutRoot + '\OBJ\290');
+    ForceDirectories(OutRoot + '\HPP\290');
+    ForceDirectories(OutRoot + '\EXE');
+    ExtraProps := Format(
+      '/p:DCC_BplOutput="%s\BPL\290" /p:DCC_DcpOutput="%s\DCP\290" ' +
+      '/p:DCC_DcuOutput="%s\DCU\290" /p:DCC_ObjOutput="%s\OBJ\290" ' +
+      '/p:DCC_HppOutput="%s\HPP\290" /p:DCC_ExeOutput="%s\EXE" ' +
+      '/p:DCC_AdditionalSwitches=--depends',
+      [OutRoot, OutRoot, OutRoot, OutRoot, OutRoot, OutRoot]);
+    if GetEnvironmentVariable('DCC_UnitSearchPath') = '' then
+      SetEnvironmentVariable('DCC_UnitSearchPath',
+        PChar(BuildWorkspaceSearchPath(Args.WorkspaceRoot)));
   end;
 
   // Pass environment.proj variables not already in the Windows environment.
@@ -86,8 +154,8 @@ begin
   // Build the command line
   // We use cmd /c to run rsvars.bat first, then MSBuild
   Result := Format(
-    'cmd.exe /c "call "%s" && MSBuild.exe "%s" /t:rebuild /p:Config=%s /p:Platform=%s /p:PreBuildEvent= /p:PostBuildEvent= /v:normal %s"',
-    [RSVars, Args.ProjectPathWin, Args.ConfigStr, Args.PlatformStr, ExtraProps]);
+    'cmd.exe /c "call "%s" && MSBuild.exe "%s" /t:%s /p:Config=%s /p:Platform=%s /p:PreBuildEvent= /p:PostBuildEvent= /v:normal %s"',
+    [RSVars, Args.ProjectPathWin, Target, Args.ConfigStr, Args.PlatformStr, ExtraProps]);
 end;
 
 class function TMSBuildRunner.RunProcess(const CommandLine: string;

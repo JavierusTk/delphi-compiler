@@ -36,8 +36,6 @@ uses
   System.SysUtils, System.IOUtils, System.Classes, System.RegularExpressions,
   Compilar.PathUtils, Compilar.Config;
 
-const
-  TEMP_OUTPUT_DIR = 'W:\temp\compilar';
 
 class function TProjectInfo.FindDccCommandLine(const MSBuildOutput: string): string;
 var
@@ -192,12 +190,26 @@ var
 begin
   Result := '';
 
-  // In test mode, output always goes to temp folder
+  // In test mode, output always goes to the per-process temp folder
   if Args.TestMode then
   begin
     ProjectName := ChangeFileExt(TPath.GetFileName(Args.ProjectPathWin), '');
     Extension := GetProjectExtension(Args.ProjectPathWin);
-    FullPath := TPath.Combine(TEMP_OUTPUT_DIR, ProjectName + Extension);
+    FullPath := TPath.Combine(TestScratchDir, ProjectName + Extension);
+    if FileExists(FullPath) then
+      Result := TPathUtils.NormalizeForOutput(FullPath);
+    Exit;
+  end;
+
+  // In workspace mode, output always goes under ROOT\out
+  if Args.WorkspaceRoot <> '' then
+  begin
+    ProjectName := ChangeFileExt(TPath.GetFileName(Args.ProjectPathWin), '');
+    Extension := GetProjectExtension(Args.ProjectPathWin);
+    if Extension = '.bpl' then
+      FullPath := Args.WorkspaceRoot + '\out\BPL\290\' + ProjectName + Extension
+    else
+      FullPath := Args.WorkspaceRoot + '\out\EXE\' + ProjectName + Extension;
     if FileExists(FullPath) then
       Result := TPathUtils.NormalizeForOutput(FullPath);
     Exit;

@@ -51,6 +51,13 @@ Events are executed via a temp `.bat` file (PID-unique name) in the project dire
 
 > **Note**: Custom MSBuild targets (`<Target Name="BeforeBuild">`) are NOT handled — only `<PreBuildEvent>` and `<PostBuildEvent>` property elements.
 
+## Build Targets and Workspace Mode (v1.7)
+
+- Default target: **`/t:build`** (incremental). `/t:rebuild` requires `--rebuild-canonical` (its Clean step can delete shared canonical DCPs).
+- `--workspace=ROOT`: cmx-workspace slot mode — all outputs under `ROOT\out`, env-seeded `DCC_UnitSearchPath`, `--depends` provenance file, auto-translation of `W:\Packages290\...` project paths to the slot copy. Mutually exclusive with `--test` and `--rebuild-canonical`.
+- Slot guard: env `CMX_WORKSPACE` set + `W:\` project + no `--workspace` → `invalid`.
+- `--test` scratch: `W:\temp\compilar\<PID>` (per-process, parallel-safe).
+
 ## JSON Output Status Values
 
 | Status | Meaning |

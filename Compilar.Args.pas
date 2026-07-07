@@ -38,6 +38,8 @@ begin
   Args.ContextLines := 5;
   Args.RawOutput := False;
   Args.WSLMode := False;
+  Args.WorkspaceRoot := '';
+  Args.RebuildCanonical := False;
 
   // Check for minimum arguments
   if ParamCount < 1 then
@@ -105,6 +107,25 @@ begin
       if Args.ContextLines < 0 then Args.ContextLines := 0;
       if Args.ContextLines > 20 then Args.ContextLines := 20;
     end
+    else if Param.StartsWith('--workspace=', True) then
+    begin
+      Args.WorkspaceRoot := Copy(Param, 13, MaxInt);
+      // Normalize to Windows form and strip trailing slash
+      if TPathUtils.IsLinuxPath(Args.WorkspaceRoot) then
+        Args.WorkspaceRoot := TPathUtils.LinuxToWindows(Args.WorkspaceRoot);
+      Args.WorkspaceRoot := StringReplace(Args.WorkspaceRoot, '/', '\', [rfReplaceAll]);
+      while Args.WorkspaceRoot.EndsWith('\') do
+        SetLength(Args.WorkspaceRoot, Length(Args.WorkspaceRoot) - 1);
+      if not DirectoryExists(Args.WorkspaceRoot) then
+      begin
+        ErrorMsg := 'Workspace root not found: ' + Args.WorkspaceRoot;
+        Exit;
+      end;
+    end
+    else if ParamUpper = '--REBUILD-CANONICAL' then
+    begin
+      Args.RebuildCanonical := True;
+    end
     else if ParamUpper = '--TEST' then
     begin
       Args.TestMode := True;
@@ -131,6 +152,56 @@ begin
       Args.TestMode := True;
     end;
     // Unknown arguments are silently ignored
+  end;
+
+  // Workspace mode: the project to compile is the SLOT copy. Translate a
+  // canonical W:\Packages290\... path (what discovery tooling returns) to the
+  // workspace worktree; any other W:\ project is an error.
+  if Args.WorkspaceRoot <> '' then
+  begin
+    if Args.ProjectPathWin.StartsWith('W:\Packages290\', True) then
+    begin
+      Args.ProjectPathWin := Args.WorkspaceRoot + Copy(Args.ProjectPathWin, 3, MaxInt);
+      Args.ProjectPath := TPathUtils.WindowsToLinux(Args.ProjectPathWin);
+      if not FileExists(Args.ProjectPathWin) then
+      begin
+        ErrorMsg := 'Workspace copy of the project not found: ' + Args.ProjectPathWin;
+        Exit;
+      end;
+    end
+    else if Args.ProjectPathWin.StartsWith('W:\', True) then
+    begin
+      ErrorMsg := 'In workspace mode the project must live under the workspace (or be given as W:\Packages290\... for auto-translation). Got: ' + Args.ProjectPathWin;
+      Exit;
+    end;
+  end;
+
+  // Mutually exclusive / incoherent combinations
+  if (Args.WorkspaceRoot <> '') and Args.TestMode then
+  begin
+    ErrorMsg := '--workspace and --test are mutually exclusive (a workspace build already writes to ROOT\out).';
+    Exit;
+  end;
+  if (Args.WorkspaceRoot <> '') and Args.RebuildCanonical then
+  begin
+    ErrorMsg := '--rebuild-canonical is not allowed inside a workspace (/t:rebuild must never run against a slot).';
+    Exit;
+  end;
+
+  // Slot-session guard (cmx-workspace): inside a slot (CMX_WORKSPACE set), a
+  // canonical W:\ project without --workspace would write to the SHARED
+  // canonical output dirs. Hard error with the corrected invocation.
+  if (Args.WorkspaceRoot = '') and (GetEnvironmentVariable('CMX_WORKSPACE') <> '') then
+  begin
+    if Args.ProjectPathWin.StartsWith('W:\', True) or
+       Args.ProjectPathWin.StartsWith('C:\cmx-ws\', True) then
+    begin
+      ErrorMsg := 'This session runs inside cmx-workspace slot "' +
+        GetEnvironmentVariable('CMX_WORKSPACE') +
+        '". Use --workspace=' + GetEnvironmentVariable('CMX_WORKSPACE') +
+        ' (and the slot copy of the project under it), or "cmx-workspace build".';
+      Exit;
+    end;
   end;
 
   Result := True;

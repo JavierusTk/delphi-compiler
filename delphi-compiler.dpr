@@ -136,11 +136,11 @@ begin
         if OutputFileTime < CompileStartTime then
         begin
           Result.OutputStale := True;
-          Result.OutputMessage := 'NOT A SUCCESSFUL BUILD. The output binary is locked by another process, so MSBuild /t:rebuild could not delete it in the Clean step and aborted BEFORE compiling: the sources were NOT compiled. "errors":0 here is meaningless (no compilation ran). Close the process holding the output (or free the file) and recompile to get a real result.';
-          // NOT a success: with /t:rebuild a locked output makes the Clean step fail,
-          // so the Build target never runs and NOTHING is compiled. Flag it distinctly,
-          // but callers must NOT read output_locked as a clean compile: errors=0 here
-          // means "nothing was compiled", not "compiled with no errors".
+          Result.OutputMessage := 'NOT A SUCCESSFUL BUILD. The output binary was NOT rewritten by this run (most likely locked by another process: with /t:rebuild the Clean step aborts before compiling; with the default /t:build the linker cannot rewrite the locked file). "errors":0 here is meaningless. Close the process holding the output (or free the file) and recompile to get a real result.';
+          // NOT a success: a locked output means the binary on disk does not
+          // correspond to this compilation. Flag it distinctly, but callers must
+          // NOT read output_locked as a clean compile: errors=0 here means
+          // "output not produced", not "compiled with no errors".
           if Result.ErrorCount = 0 then
             Result.Status := 'output_locked';
         end;

@@ -1,5 +1,13 @@
 ﻿# Changelog
 
+## v1.7 - 2026-07-07
+
+- **Default MSBuild target is now `/t:build`** (incremental, no Clean). The Clean step of `/t:rebuild` was empirically shown to DELETE shared canonical artifacts (`W:\DCP\290\*.dcp`) under certain project configurations. `/t:rebuild` now requires the explicit `--rebuild-canonical` flag.
+- **New `--workspace=ROOT` mode** (cmx-workspace slots, see `W:/_DEVDOCS/WORKTREE-PARALLEL-BUILD-PROPOSAL.md`): redirects ALL outputs (`DCC_Bpl/Dcp/Dcu/Obj/HppOutput` + `DCC_ExeOutput`) under `ROOT\out`, seeds `DCC_UnitSearchPath` as an environment variable (never `/p:`, which would replace the project's own relative dirs), adds `--depends` so `ROOT\out\DCP\290\<Proj>.d` records unit provenance, and auto-translates a canonical `W:\Packages290\...` project path to the workspace copy.
+- **Slot-session guard**: with env `CMX_WORKSPACE` set (propagated from WSL via `WSLENV=CMX_WORKSPACE/w`), invoking the tool on a `W:\`/`C:\cmx-ws\` project WITHOUT `--workspace` is a hard `invalid` error (prevents accidental canonical builds from inside a slot).
+- **`--test` scratch is now per-process** (`W:\temp\compilar\<PID>`): two concurrent `--test` runs no longer clean each other's output. The duplicated `TEMP_OUTPUT_DIR` constant was consolidated into `Compilar.Types.TestScratchDir`.
+- `output_locked` message updated for `/t:build` semantics (locked output = binary not rewritten, not necessarily a Clean abort).
+
 ## v1.6 - 2026-06-30
 
 - **Fix misleading `output_locked` semantics + message.** MSBuild is invoked with `/t:rebuild`, so a locked output binary makes the **Clean** step fail (it cannot delete the `.bpl`/`.exe` held by a running process) and the build **aborts before the Build/compile step** — *nothing is compiled* and the parser sees 0 Delphi errors. The old `output_message` ("Compilation succeeded but the output file was NOT updated") was wrong: compilation did **not** happen, and `errors:0` certifies nothing.
