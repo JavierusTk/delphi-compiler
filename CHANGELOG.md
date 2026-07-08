@@ -1,5 +1,10 @@
 ﻿# Changelog
 
+## v1.8 - 2026-07-08
+
+- **`--workspace` search path now prepends the slot's private baseline** (`ROOT\baseline\DCP\290` and `ROOT\baseline\DCU\290`, when present) right after `ROOT\out\DCP\290` and BEFORE the registry Library Path (which cites live `W:\DCP\290`). With cmx-workspace v2.1 slots, builds resolve DCP/DCU from the slot's pinned mirror instead of the live canonical — a concurrent canonical build no longer affects slot builds. See `W:/_DEVDOCS/WORKTREE-PARALLEL-BUILD-PROPOSAL.md` (v2.1 note).
+- **Slot infrastructure dirs excluded from the worktree enumeration**: `baseline`, `run` and `bin` at ROOT level are no longer added to `DCC_UnitSearchPath` as if they were source worktrees.
+
 ## v1.7 - 2026-07-07
 
 - **Default MSBuild target is now `/t:build`** (incremental, no Clean). The Clean step of `/t:rebuild` was empirically shown to DELETE shared canonical artifacts (`W:\DCP\290\*.dcp`) under certain project configurations. `/t:rebuild` now requires the explicit `--rebuild-canonical` flag.

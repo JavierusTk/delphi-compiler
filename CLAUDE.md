@@ -54,7 +54,7 @@ Events are executed via a temp `.bat` file (PID-unique name) in the project dire
 ## Build Targets and Workspace Mode (v1.7)
 
 - Default target: **`/t:build`** (incremental). `/t:rebuild` requires `--rebuild-canonical` (its Clean step can delete shared canonical DCPs).
-- `--workspace=ROOT`: cmx-workspace slot mode — all outputs under `ROOT\out`, env-seeded `DCC_UnitSearchPath`, `--depends` provenance file, auto-translation of `W:\Packages290\...` project paths to the slot copy. Mutually exclusive with `--test` and `--rebuild-canonical`.
+- `--workspace=ROOT`: cmx-workspace slot mode — all outputs under `ROOT\out`, env-seeded `DCC_UnitSearchPath`, `--depends` provenance file, auto-translation of `W:\Packages290\...` project paths to the slot copy. Mutually exclusive with `--test` and `--rebuild-canonical`. Since v1.8 the search path prepends the slot's private baseline (`ROOT\baseline\DCP\290`, `ROOT\baseline\DCU\290`) ahead of the registry Library Path, and `baseline`/`run`/`bin` root dirs are excluded from the worktree enumeration.
 - Slot guard: env `CMX_WORKSPACE` set + `W:\` project + no `--workspace` → `invalid`.
 - `--test` scratch: `W:\temp\compilar\<PID>` (per-process, parallel-safe).
 

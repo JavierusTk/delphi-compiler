@@ -47,17 +47,26 @@ var
   Attrs: DWORD;
   Name: string;
 begin
-  // out\DCP\290 first (intra-workspace DCP cascade), then every REAL directory
-  // at ROOT level (worktrees of the edit-set; junctions are reparse points and
-  // resolve from the canonical registry Library Path anyway).
+  // out\DCP\290 first (intra-workspace DCP cascade), then the slot's PRIVATE
+  // baseline DCP/DCU (pinned mirror of the canonical: isolates the build from
+  // concurrent canonical mutation; must precede the registry Library Path,
+  // which cites live W:\DCP\290), then every REAL directory at ROOT level
+  // (worktrees of the edit-set; junctions are reparse points and resolve from
+  // the canonical registry Library Path anyway).
   Result := Root + '\out\DCP\290';
+  if DirectoryExists(Root + '\baseline\DCP\290') then
+    Result := Result + ';' + Root + '\baseline\DCP\290';
+  if DirectoryExists(Root + '\baseline\DCU\290') then
+    Result := Result + ';' + Root + '\baseline\DCU\290';
   if FindFirst(Root + '\*', faDirectory, SR) = 0 then
   begin
     try
       repeat
         Name := SR.Name;
+        // baseline/run/bin are slot infrastructure, not source worktrees
         if (Name = '.') or (Name = '..') or (Name = 'out') or Name.StartsWith('.') or
-           SameText(Name, 'Packages290') then
+           SameText(Name, 'Packages290') or SameText(Name, 'baseline') or
+           SameText(Name, 'run') or SameText(Name, 'bin') then
           Continue;
         if (SR.Attr and faDirectory) = 0 then
           Continue;
