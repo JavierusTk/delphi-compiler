@@ -1,4 +1,4 @@
-<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</ProjectGuid>
         <ProjectVersion>20.1</ProjectVersion>
@@ -93,7 +93,6 @@
         <DCCReference Include="Compilar.PathUtils.pas"/>
         <DCCReference Include="Compilar.MSBuild.pas"/>
         <DCCReference Include="Compilar.Parser.pas"/>
-        <DCCReference Include="Compilar.Lookup.pas"/>
         <DCCReference Include="Compilar.Context.pas"/>
         <DCCReference Include="Compilar.ProjectInfo.pas"/>
         <DCCReference Include="Compilar.Output.pas"/>

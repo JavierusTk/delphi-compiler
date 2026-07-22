@@ -12,7 +12,6 @@ uses
   Compilar.PathUtils in 'Compilar.PathUtils.pas',
   Compilar.MSBuild in 'Compilar.MSBuild.pas',
   Compilar.Parser in 'Compilar.Parser.pas',
-  Compilar.Lookup in 'Compilar.Lookup.pas',
   Compilar.Context in 'Compilar.Context.pas',
   Compilar.ProjectInfo in 'Compilar.ProjectInfo.pas',
   Compilar.Output in 'Compilar.Output.pas',
@@ -113,9 +112,8 @@ begin
     // 4. Parse MSBuild output (with truncation tracking)
     Issues := TOutputParser.Parse(MSBuildOutput, Args.MaxErrors, Truncated, TotalIssuesFound);
 
-    // 5. Enrich issues with context and lookup
+    // 5. Enrich issues with source context
     TContextEnricher.AddSourceContext(Issues, Args.ContextLines);
-    TLookupEnricher.AddLookup(Issues);
 
     // 6. Build result
     Result := TCompileResult.Create(Args, Issues, MSBuildExitCode, Truncated, TotalIssuesFound);
@@ -165,8 +163,8 @@ begin
     if Result.Status = 'output_locked' then
       WriteStderr('[delphi-compiler] NOT A BUILD (status=output_locked): output binary locked by another process; MSBuild /t:rebuild Clean aborted before compiling, so NOTHING was compiled. "errors":0 is meaningless here. Free the lock (close the running app) and recompile.');
 
-    // 8. Output JSON
-    WriteStdout(TJSONOutput.Generate(Result));
+    // 8. Output JSON (error items only unless --full; counters always complete)
+    WriteStdout(TJSONOutput.Generate(Result, Args.FullOutput));
 
     // 9. Deterministic process exit code (v1.9). A real pass is EXACTLY
     //    status in {ok, hints, warnings}; every other status (error,

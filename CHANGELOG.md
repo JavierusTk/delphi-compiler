@@ -1,5 +1,10 @@
 ﻿# Changelog
 
+## v1.10 - 2026-07-23
+
+- **Brief issues by default**: the `issues` array now lists only error/fatal items; warnings and hints stay as counters plus `"issues_omitted": N` and an `"issues_detail"` marker. `--full` restores every item. Rationale: sessions were piping the JSON through ad-hoc minimizers to cut the hint/warning bulk (hundreds of items on CyberMAX packages) — and those filters are exactly where `status` used to get dropped. Now the default output IS the minimal honest projection: counters always complete, error items always complete (with context), nothing left to filter.
+- **delphi-lookup enrichment removed** (user decision: too noisy). No more `"lookup"` blocks on E2003 issues; `Compilar.Lookup.pas` deleted, `DELPHI_LOOKUP_PATH`/`FILE_INDEX_PATH` config plumbing removed. Symbol resolution is the session's job (`delphi-lookup.exe` directly, skill 21).
+
 ## v1.9 - 2026-07-23
 
 - **Deterministic process exit code** (before: always 0; pass/fail lived only in the JSON `status`, and sessions reducing the JSON to an error count silently read non-builds as passes — `output_locked`, `invalid`, `internal_error` all carry `errors:0`):

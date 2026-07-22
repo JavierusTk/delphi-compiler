@@ -1,4 +1,4 @@
-# delphi-compiler
+﻿# delphi-compiler
 
 A command-line wrapper around MSBuild for Delphi projects that produces structured JSON output. Designed for integration with AI coding assistants and automated build pipelines.
 
@@ -30,6 +30,7 @@ The project path can be either Windows (`W:\path\project.dproj`) or Linux/WSL (`
 | `--max-errors=N` | `3` | Max errors to include in output (1-10) |
 | `--context-lines=N` | `5` | Lines of source context around each error (0-20) |
 | `--raw` | off | Echo raw MSBuild output to stderr |
+| `--full` | off | List warning/hint items in `issues` too (default: error items only; warnings/hints stay as counters plus `issues_omitted`) |
 | `--wsl` | off | Output file paths in Linux format (`/mnt/x/...`) |
 
 ### Example
@@ -87,19 +88,7 @@ delphi-compiler.exe W:\MyProject\MyProject.dproj --config=Release --max-errors=5
         "  42: >>> DoSomething(Value);",
         "  43:     Exit;",
         "  44:   end;"
-      ],
-      "lookup": {
-        "found": true,
-        "symbol": "DoSomething",
-        "results": [
-          {
-            "unit": "HelperUtils",
-            "path": "HelperUtils.pas",
-            "type": "procedure",
-            "line": 15
-          }
-        ]
-      }
+      ]
     }
   ]
 }
@@ -124,12 +113,6 @@ The compiler auto-detects RAD Studio from the Windows registry. To override or c
 ```env
 # Required: path to rsvars.bat (auto-detected from registry if not set)
 RSVARS_PATH=C:\Program Files (x86)\Embarcadero\Studio\23.0\bin\rsvars.bat
-
-# Optional: path to delphi-lookup.exe for symbol resolution
-DELPHI_LOOKUP_PATH=C:\Tools\delphi-lookup.exe
-
-# Optional: path to a file index for resolving missing unit files
-FILE_INDEX_PATH=C:\.public\.file-index.txt
 
 # Optional: always output Linux-style paths
 WSL=true
@@ -161,16 +144,6 @@ Or as a one-off environment variable:
 RSVARS_PATH='C:\Program Files (x86)\Embarcadero\Studio\22.0\bin\rsvars.bat' delphi-compiler.exe MyProject.dproj
 ```
 
-## Optional integrations
-
-### delphi-lookup
-
-If [delphi-lookup](https://github.com/JavierusTk/delphi-lookup) is present in the same directory (or configured via `DELPHI_LOOKUP_PATH`), the compiler will automatically look up undeclared identifiers (`E2003` errors) and include the results in the JSON output. This helps AI assistants determine which `uses` clause to add.
-
-### File index
-
-If a file index is available (a text file with one file path per line), missing file errors (`F1026`) will be looked up against it. By default the compiler looks for `.public/.file-index.txt` at the drive root of the project.
-
 ## Building from source
 
 Requires RAD Studio 12 (Delphi 12 Athens) or later.
@@ -190,7 +163,6 @@ delphi-compiler.dpr           Main project file
 Compilar.Args.pas             Command-line argument parsing
 Compilar.Config.pas           Configuration (.env, registry, auto-detection)
 Compilar.Context.pas          Source code context extraction for errors
-Compilar.Lookup.pas           Symbol lookup integration (delphi-lookup, file index)
 Compilar.MSBuild.pas          MSBuild invocation
 Compilar.Output.pas           JSON output formatting
 Compilar.Parser.pas           Compiler output parsing
