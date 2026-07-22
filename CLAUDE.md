@@ -58,6 +58,20 @@ Events are executed via a temp `.bat` file (PID-unique name) in the project dire
 - Slot guard: env `CMX_WORKSPACE` set + `W:\` project + no `--workspace` → `invalid`.
 - `--test` scratch: `W:\temp\compilar\<PID>` (per-process, parallel-safe).
 
+## Process Exit Code (v1.9)
+
+| Exit | Meaning |
+|------|---------|
+| `0` | Real pass: `status ∈ {ok, hints, warnings}` |
+| `1` | Build failure: `error`, `output_locked`, `prebuild_error` |
+| `2` | `invalid` (bad arguments / project not found / slot guard) |
+| `3` | `internal_error` (MSBuild could not run, unexpected exception) |
+
+Callers key pass/fail on the exit code (or on `status`), **never** on `errors`
+alone — `output_locked`, `invalid` and `internal_error` all report `errors: 0`
+without a successful compile. A `postbuild_error` after a clean compile keeps
+exit `0` (the binary is good; the event result is in the JSON).
+
 ## JSON Output Status Values
 
 | Status | Meaning |
