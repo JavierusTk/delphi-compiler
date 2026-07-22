@@ -1,5 +1,16 @@
 ﻿# Changelog
 
+## v1.9 - 2026-07-23
+
+- **Deterministic process exit code** (before: always 0; pass/fail lived only in the JSON `status`, and sessions reducing the JSON to an error count silently read non-builds as passes — `output_locked`, `invalid`, `internal_error` all carry `errors:0`):
+  - `0` — real pass: `status ∈ {ok, hints, warnings}`
+  - `1` — build failure: `error`, `output_locked`, `prebuild_error`
+  - `2` — `invalid` (bad arguments / project not found / slot guard)
+  - `3` — `internal_error` (MSBuild could not run, unexpected exception)
+  - A `postbuild_error` after a clean compile does NOT change the exit code (the binary is good; the event result is in the JSON).
+  - Rationale: this folds the external `delphi-compile-check` wrapper gate (W:/bin, 2026-07-22, retro gate A) into the canonical tool. The wrapper is retired.
+  - No caller depended on the old unconditional 0 (audited: `cmx-workspace build` invokes MSBuild directly; every other reference is documentation).
+
 ## v1.8 - 2026-07-08
 
 - **`--workspace` search path now prepends the slot's private baseline** (`ROOT\baseline\DCP\290` and `ROOT\baseline\DCU\290`, when present) right after `ROOT\out\DCP\290` and BEFORE the registry Library Path (which cites live `W:\DCP\290`). With cmx-workspace v2.1 slots, builds resolve DCP/DCU from the slot's pinned mirror instead of the live canonical — a concurrent canonical build no longer affects slot builds. See `W:/_DEVDOCS/WORKTREE-PARALLEL-BUILD-PROPOSAL.md` (v2.1 note).

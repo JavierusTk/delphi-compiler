@@ -64,7 +64,7 @@ begin
     if not TArgsParser.Parse(Args, ParseError) then
     begin
       WriteStdout(TJSONOutput.Invalid(ParseError));
-      ExitCode := 0;
+      ExitCode := 2;
       Exit;
     end;
 
@@ -84,7 +84,7 @@ begin
       if not LEventResult.Success then
       begin
         WriteStdout(TJSONOutput.BuildEventError('prebuild', Args, LEventResult));
-        ExitCode := 0;
+        ExitCode := 1;
         Exit;
       end;
     end;
@@ -96,7 +96,7 @@ begin
     if not TMSBuildRunner.Execute(Args, MSBuildOutput, MSBuildExitCode) then
     begin
       WriteStdout(TJSONOutput.InternalError('MSBuild execution failed'));
-      ExitCode := 0;
+      ExitCode := 3;
       Exit;
     end;
 
@@ -167,13 +167,23 @@ begin
 
     // 8. Output JSON
     WriteStdout(TJSONOutput.Generate(Result));
-    ExitCode := 0;
+
+    // 9. Deterministic process exit code (v1.9). A real pass is EXACTLY
+    //    status in {ok, hints, warnings}; every other status (error,
+    //    output_locked, ...) reports errors:0 or not, but did NOT produce a
+    //    trustworthy binary. Callers key on the exit code (or on status),
+    //    never on the error count alone.
+    if (Result.Status = 'ok') or (Result.Status = 'hints')
+       or (Result.Status = 'warnings') then
+      ExitCode := 0
+    else
+      ExitCode := 1;
 
   except
     on E: Exception do
     begin
       WriteStdout(TJSONOutput.InternalError(E.Message));
-      ExitCode := 0;
+      ExitCode := 3;
     end;
   end;
 end.
