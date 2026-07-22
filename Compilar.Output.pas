@@ -8,8 +8,13 @@ uses
 type
   TJSONOutput = class
   public
-    /// Generate pretty-printed JSON for successful/error compilation result
-    class function Generate(const AResult: TCompileResult): string;
+    /// Generate pretty-printed JSON for successful/error compilation result.
+    /// AFullIssues=False (the CLI default) lists only error/fatal items in the
+    /// issues array — warnings/hints stay as counters plus "issues_omitted" —
+    /// so sessions get a minimal honest projection without piping through
+    /// ad-hoc filters. --full restores every item.
+    class function Generate(const AResult: TCompileResult;
+      AFullIssues: Boolean = True): string;
 
     /// Generate JSON for invalid arguments
     class function Invalid(const ErrorMsg: string): string;
@@ -24,7 +29,6 @@ type
   private
     class function EscapeJSON(const S: string): string;
     class function IssueToJSON(const Issue: TCompileIssue; Indent: Integer): string;
-    class function LookupToJSON(const Lookup: TLookupResult; Indent: Integer): string;
     class function StringArrayToJSON(const Arr: TArray<string>; Indent: Integer): string;
     class function Pad(Level: Integer): string;
   end;
@@ -104,58 +108,6 @@ begin
   end;
 end;
 
-class function TJSONOutput.LookupToJSON(const Lookup: TLookupResult; Indent: Integer): string;
-var
-  SB: TStringBuilder;
-  I: Integer;
-  Entry: TLookupEntry;
-  P, P1, P2: string;
-begin
-  P := Pad(Indent);
-  P1 := Pad(Indent + 1);
-  P2 := Pad(Indent + 2);
-
-  SB := TStringBuilder.Create;
-  try
-    SB.Append('{').Append(NL);
-    SB.Append(P1).Append('"found": ').Append(BoolToStr(Lookup.Found, True).ToLower);
-
-    SB.Append(',').Append(NL);
-    SB.Append(P1).Append('"symbol": "').Append(EscapeJSON(Lookup.Symbol)).Append('"');
-
-    if Lookup.Found and (Length(Lookup.Results) > 0) then
-    begin
-      SB.Append(',').Append(NL);
-      SB.Append(P1).Append('"results": [').Append(NL);
-      for I := 0 to High(Lookup.Results) do
-      begin
-        Entry := Lookup.Results[I];
-        SB.Append(P2).Append('{').Append(NL);
-        SB.Append(Pad(Indent + 3)).Append('"unit": "').Append(EscapeJSON(Entry.UnitName)).Append('",').Append(NL);
-        SB.Append(Pad(Indent + 3)).Append('"path": "').Append(EscapeJSON(Entry.Path)).Append('",').Append(NL);
-        SB.Append(Pad(Indent + 3)).Append('"type": "').Append(EscapeJSON(Entry.SymbolType)).Append('",').Append(NL);
-        SB.Append(Pad(Indent + 3)).Append('"line": ').Append(IntToStr(Entry.Line)).Append(NL);
-        SB.Append(P2).Append('}');
-        if I < High(Lookup.Results) then
-          SB.Append(',');
-        SB.Append(NL);
-      end;
-      SB.Append(P1).Append(']');
-    end
-    else if Lookup.Hint <> '' then
-    begin
-      SB.Append(',').Append(NL);
-      SB.Append(P1).Append('"hint": "').Append(EscapeJSON(Lookup.Hint)).Append('"');
-    end;
-
-    SB.Append(NL);
-    SB.Append(P).Append('}');
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
 class function TJSONOutput.IssueToJSON(const Issue: TCompileIssue; Indent: Integer): string;
 var
   SB: TStringBuilder;
@@ -181,13 +133,6 @@ begin
       SB.Append(P1).Append('"context": ').Append(StringArrayToJSON(Issue.Context, Indent + 1));
     end;
 
-    // Add lookup if it was performed
-    if Issue.Lookup.Symbol <> '' then
-    begin
-      SB.Append(',').Append(NL);
-      SB.Append(P1).Append('"lookup": ').Append(LookupToJSON(Issue.Lookup, Indent + 1));
-    end;
-
     SB.Append(NL);
     SB.Append(P).Append('}');
     Result := SB.ToString;
@@ -196,14 +141,29 @@ begin
   end;
 end;
 
-class function TJSONOutput.Generate(const AResult: TCompileResult): string;
+class function TJSONOutput.Generate(const AResult: TCompileResult;
+  AFullIssues: Boolean): string;
 var
   SB: TStringBuilder;
-  I: Integer;
+  I, Omitted: Integer;
   P1, P2: string;
+  Shown: TArray<TCompileIssue>;
 begin
   P1 := Pad(1);
   P2 := Pad(2);
+
+  // Default projection: error/fatal items only; warnings/hints remain visible
+  // as counters. --full lists everything.
+  if AFullIssues then
+    Shown := AResult.Issues
+  else
+  begin
+    Shown := [];
+    for I := 0 to High(AResult.Issues) do
+      if AResult.Issues[I].IssueType in [itError, itFatal] then
+        Shown := Shown + [AResult.Issues[I]];
+  end;
+  Omitted := Length(AResult.Issues) - Length(Shown);
 
   SB := TStringBuilder.Create;
   try
@@ -273,19 +233,26 @@ begin
       SB.Append(P1).Append('"total_issues_found": ').Append(IntToStr(AResult.TotalIssuesFound)).Append(',').Append(NL);
     end;
 
+    // Brief-mode marker: warning/hint items exist but are not listed
+    if Omitted > 0 then
+    begin
+      SB.Append(P1).Append('"issues_omitted": ').Append(IntToStr(Omitted)).Append(',').Append(NL);
+      SB.Append(P1).Append('"issues_detail": "error items only - rerun with --full for warning/hint items",').Append(NL);
+    end;
+
     // Issues array (always present, may be empty)
     SB.Append(P1).Append('"issues": ');
-    if Length(AResult.Issues) = 0 then
+    if Length(Shown) = 0 then
     begin
       SB.Append('[]').Append(NL);
     end
     else
     begin
       SB.Append('[').Append(NL);
-      for I := 0 to High(AResult.Issues) do
+      for I := 0 to High(Shown) do
       begin
-        SB.Append(P2).Append(IssueToJSON(AResult.Issues[I], 2));
-        if I < High(AResult.Issues) then
+        SB.Append(P2).Append(IssueToJSON(Shown[I], 2));
+        if I < High(Shown) then
           SB.Append(',');
         SB.Append(NL);
       end;

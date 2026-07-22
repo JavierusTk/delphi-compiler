@@ -12,22 +12,6 @@ type
   /// Issue type from compiler
   TIssueType = (itError, itWarning, itHint, itFatal);
 
-  /// Single lookup entry from delphi-lookup
-  TLookupEntry = record
-    UnitName: string;
-    Path: string;
-    SymbolType: string;  // function, procedure, type, const, var
-    Line: Integer;
-  end;
-
-  /// Lookup result for undeclared identifiers and missing files
-  TLookupResult = record
-    Found: Boolean;
-    Symbol: string;
-    Results: TArray<TLookupEntry>;
-    Hint: string;  // If not found, contains suggestion
-  end;
-
   /// Single compilation issue (error, warning, or hint)
   TCompileIssue = record
     IssueType: TIssueType;
@@ -37,7 +21,6 @@ type
     Column: Integer;
     Message: string;
     Context: TArray<string>;  // Source code lines around error
-    Lookup: TLookupResult;    // For undeclared identifier / file-not-found errors
   end;
 
   /// Parsed command line arguments
@@ -50,6 +33,7 @@ type
     MaxErrors: Integer;       // Max errors to report (default 3)
     ContextLines: Integer;    // Lines of context around error (default 5)
     RawOutput: Boolean;       // Echo raw MSBuild output to stderr
+    FullOutput: Boolean;      // --full: list warning/hint items too (default: error items only)
     WSLMode: Boolean;         // Output Linux paths (--wsl flag)
     WorkspaceRoot: string;    // --workspace=ROOT: redirect ALL outputs under ROOT\out (cmx-workspace slots)
     RebuildCanonical: Boolean;// --rebuild-canonical: use /t:rebuild (default is /t:build since workspace mode)

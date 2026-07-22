@@ -138,8 +138,6 @@ begin
 
     // Initialize arrays
     SetLength(Issue.Context, 0);
-    Issue.Lookup.Found := False;
-    SetLength(Issue.Lookup.Results, 0);
 
     Result := True;
   end;

@@ -17,7 +17,6 @@ Source code for `delphi-compiler.exe` — a Delphi compilation wrapper with stru
 | `Compilar.BuildEvents.pas` | PreBuild/PostBuild event parsing and execution |
 | `Compilar.Config.pas` | Configuration (.env, registry, auto-detection) |
 | `Compilar.Context.pas` | Source code context extraction for errors |
-| `Compilar.Lookup.pas` | Symbol lookup integration for undeclared identifiers |
 | `Compilar.MSBuild.pas` | MSBuild invocation wrapper |
 | `Compilar.Output.pas` | JSON output formatting |
 | `Compilar.Parser.pas` | Compiler output parsing |
@@ -34,9 +33,9 @@ Source code for `delphi-compiler.exe` — a Delphi compilation wrapper with stru
 4. Execute PreBuild event (abort on failure → prebuild_error)
 5. Execute MSBuild (with /p:PreBuildEvent= /p:PostBuildEvent= to suppress native events)
 6. Parse compiler output → TCompileIssue[]
-7. Enrich with source context + symbol lookup
+7. Enrich with source context
 8. Execute PostBuild event (only if no errors)
-9. Output JSON → stdout
+9. Output JSON → stdout (error items only unless `--full`; counters always complete) + deterministic exit code
 ```
 
 ## Build Events

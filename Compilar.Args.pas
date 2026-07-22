@@ -37,6 +37,7 @@ begin
   Args.MaxErrors := 3;
   Args.ContextLines := 5;
   Args.RawOutput := False;
+  Args.FullOutput := False;
   Args.WSLMode := False;
   Args.WorkspaceRoot := '';
   Args.RebuildCanonical := False;
@@ -133,6 +134,10 @@ begin
     else if ParamUpper = '--RAW' then
     begin
       Args.RawOutput := True;
+    end
+    else if ParamUpper = '--FULL' then
+    begin
+      Args.FullOutput := True;
     end
     else if ParamUpper = '--WSL' then
     begin

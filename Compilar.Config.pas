@@ -5,15 +5,14 @@ interface
 type
   TCompilerConfig = record
     RsVarsPath: string;
-    LookupPath: string;
-    FileIndexPath: string;
     EnvironmentProjPath: string;
     WSLMode: Boolean;
     Warnings: TArray<string>;
   end;
 
 /// Initialize config from .env file, environment variables, and auto-detection.
-/// ProjectPathWin is needed to derive the drive root for FILE_INDEX_PATH auto-detection.
+/// ProjectPathWin is currently unused (kept for signature stability; it was
+/// needed by the retired delphi-lookup/file-index enrichment).
 /// WSLFromCLI overrides any WSL setting from config/env.
 procedure InitConfig(const ProjectPathWin: string; WSLFromCLI: Boolean);
 
@@ -215,40 +214,6 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
-// Auto-detection for delphi-lookup.exe (same dir as compiler exe)
-// ---------------------------------------------------------------------------
-
-function AutoDetectLookupPath: string;
-var
-  ExeDir, Candidate: string;
-begin
-  Result := '';
-  ExeDir := ExtractFilePath(ParamStr(0));
-  Candidate := IncludeTrailingPathDelimiter(ExeDir) + 'delphi-lookup.exe';
-  if FileExists(Candidate) then
-    Result := Candidate;
-end;
-
-// ---------------------------------------------------------------------------
-// Auto-detection for .file-index.txt (drive root of project)
-// ---------------------------------------------------------------------------
-
-function AutoDetectFileIndexPath(const ProjectPathWin: string): string;
-var
-  DriveRoot, Candidate: string;
-begin
-  Result := '';
-  if Length(ProjectPathWin) < 3 then
-    Exit;
-
-  // Extract drive root: "W:\..." -> "W:\"
-  DriveRoot := Copy(ProjectPathWin, 1, 3);
-  Candidate := DriveRoot + '.public\.file-index.txt';
-  if FileExists(Candidate) then
-    Result := Candidate;
-end;
-
-// ---------------------------------------------------------------------------
 // AddWarning helper
 // ---------------------------------------------------------------------------
 
@@ -412,34 +377,6 @@ begin
     GConfig.RsVarsPath := AutoDetectRsVars(AutoError);
     if GConfig.RsVarsPath = '' then
       raise Exception.Create(AutoError);
-  end;
-
-  // --- DELPHI_LOOKUP_PATH ---
-  Val := ResolveValue('DELPHI_LOOKUP_PATH', EnvPairs);
-  if Val <> '' then
-  begin
-    if FileExists(Val) then
-      GConfig.LookupPath := Val
-    else
-      AddWarning(GConfig, 'DELPHI_LOOKUP_PATH not found: ' + Val);
-  end
-  else
-    GConfig.LookupPath := AutoDetectLookupPath;
-
-  // --- FILE_INDEX_PATH ---
-  Val := ResolveValue('FILE_INDEX_PATH', EnvPairs);
-  if Val <> '' then
-  begin
-    if FileExists(Val) then
-      GConfig.FileIndexPath := Val
-    else
-      AddWarning(GConfig, 'FILE_INDEX_PATH not found: ' + Val);
-  end
-  else
-  begin
-    GConfig.FileIndexPath := AutoDetectFileIndexPath(ProjectPathWin);
-    if GConfig.FileIndexPath = '' then
-      AddWarning(GConfig, 'File index not found at drive root .public\.file-index.txt');
   end;
 
   // --- WSL ---
