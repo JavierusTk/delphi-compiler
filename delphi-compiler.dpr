@@ -2,6 +2,8 @@ program DelphiCompiler;
 
 {$APPTYPE CONSOLE}
 
+{$R 'delphi-compiler.res'}
+
 uses
   Winapi.Windows,
   System.SysUtils,
@@ -59,6 +61,14 @@ var
 begin
 
   try
+    // 0. Version query (exclusive first-arg mode): tool identity, no compile.
+    if (ParamCount >= 1) and SameText(ParamStr(1), '--version') then
+    begin
+      WriteStdout(TJSONOutput.Version);
+      ExitCode := 0;
+      Exit;
+    end;
+
     // 1. Parse command line arguments
     if not TArgsParser.Parse(Args, ParseError) then
     begin
@@ -112,8 +122,9 @@ begin
     // 4. Parse MSBuild output (with truncation tracking)
     Issues := TOutputParser.Parse(MSBuildOutput, Args.MaxErrors, Truncated, TotalIssuesFound);
 
-    // 5. Enrich issues with source context
-    TContextEnricher.AddSourceContext(Issues, Args.ContextLines);
+    // 5. Enrich issues with source context (ProjectDir resolves dcc's
+    //    project-relative paths, e.g. the main .dpr in F-level errors)
+    TContextEnricher.AddSourceContext(Issues, Args.ContextLines, LProjectDir);
 
     // 6. Build result
     Result := TCompileResult.Create(Args, Issues, MSBuildExitCode, Truncated, TotalIssuesFound);

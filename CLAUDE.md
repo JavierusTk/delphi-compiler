@@ -57,6 +57,10 @@ Events are executed via a temp `.bat` file (PID-unique name) in the project dire
 - Slot guard: env `CMX_WORKSPACE` set + `W:\` project + no `--workspace` → `invalid`.
 - `--test` scratch: `W:\temp\compilar\<PID>` (per-process, parallel-safe).
 
+## Version Identity (v1.11)
+
+`--version` as sole/first argument prints `{"tool": "delphi-compiler", "version": "..."}` and exits 0. Every JSON output carries a `"version"` field and the exe's PE VerInfo matches. Single source of truth: `COMPILER_VERSION` in `Compilar.Types.pas` — bump it together with `CHANGELOG.md` and the dproj `VerInfo_Keys` on every release.
+
 ## Process Exit Code (v1.9)
 
 | Exit | Meaning |

@@ -19,6 +19,9 @@ type
     /// Generate JSON for invalid arguments
     class function Invalid(const ErrorMsg: string): string;
 
+    /// Generate JSON for the --version query (tool identity, no compile)
+    class function Version: string;
+
     /// Generate JSON for internal error
     class function InternalError(const ErrorMsg: string): string;
 
@@ -170,6 +173,7 @@ begin
     SB.Append('{').Append(NL);
 
     SB.Append(P1).Append('"status": "').Append(EscapeJSON(AResult.Status)).Append('",').Append(NL);
+    SB.Append(P1).Append('"version": "').Append(COMPILER_VERSION).Append('",').Append(NL);
     SB.Append(P1).Append('"project": "').Append(EscapeJSON(AResult.Project)).Append('",').Append(NL);
     SB.Append(P1).Append('"project_path": "').Append(EscapeJSON(AResult.ProjectPath)).Append('",').Append(NL);
     SB.Append(P1).Append('"config": "').Append(EscapeJSON(AResult.Config)).Append('",').Append(NL);
@@ -270,7 +274,16 @@ class function TJSONOutput.Invalid(const ErrorMsg: string): string;
 begin
   Result := '{' + NL +
     Pad(1) + '"status": "invalid",' + NL +
+    Pad(1) + '"version": "' + COMPILER_VERSION + '",' + NL +
     Pad(1) + '"error": "' + EscapeJSON(ErrorMsg) + '"' + NL +
+    '}';
+end;
+
+class function TJSONOutput.Version: string;
+begin
+  Result := '{' + NL +
+    Pad(1) + '"tool": "delphi-compiler",' + NL +
+    Pad(1) + '"version": "' + COMPILER_VERSION + '"' + NL +
     '}';
 end;
 
@@ -278,6 +291,7 @@ class function TJSONOutput.InternalError(const ErrorMsg: string): string;
 begin
   Result := '{' + NL +
     Pad(1) + '"status": "internal_error",' + NL +
+    Pad(1) + '"version": "' + COMPILER_VERSION + '",' + NL +
     Pad(1) + '"error": "' + EscapeJSON(ErrorMsg) + '"' + NL +
     '}';
 end;
@@ -291,6 +305,7 @@ begin
   P2 := Pad(2);
   Result := '{' + NL +
     P1 + '"status": "' + EscapeJSON(AEventType) + '_error",' + NL +
+    P1 + '"version": "' + COMPILER_VERSION + '",' + NL +
     P1 + '"project": "' + EscapeJSON(TPath.GetFileName(Args.ProjectPathWin)) + '",' + NL +
     P1 + '"project_path": "' + EscapeJSON(TPathUtils.NormalizeForOutput(Args.ProjectPathWin)) + '",' + NL +
     P1 + '"config": "' + EscapeJSON(Args.ConfigStr) + '",' + NL +

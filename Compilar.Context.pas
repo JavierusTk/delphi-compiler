@@ -10,8 +10,12 @@ type
   TContextEnricher = class
   public
     /// Add source code context to each issue
-    /// ContextLines specifies how many lines before and after the error line
-    class procedure AddSourceContext(var Issues: TArray<TCompileIssue>; ContextLines: Integer);
+    /// ContextLines specifies how many lines before and after the error line.
+    /// ProjectDir resolves issue paths that dcc reports relative to the
+    /// project (typically the main .dpr), which are dead against this
+    /// process' cwd.
+    class procedure AddSourceContext(var Issues: TArray<TCompileIssue>;
+      ContextLines: Integer; const ProjectDir: string = '');
 
   private
     class function ReadSourceLines(const FilePath: string;
@@ -26,10 +30,10 @@ uses
   Compilar.PathUtils;
 
 class procedure TContextEnricher.AddSourceContext(var Issues: TArray<TCompileIssue>;
-  ContextLines: Integer);
+  ContextLines: Integer; const ProjectDir: string);
 var
   I: Integer;
-  WinPath: string;
+  WinPath, ResolvedPath: string;
 begin
   for I := 0 to High(Issues) do
   begin
@@ -37,6 +41,19 @@ begin
     begin
       // Convert to Windows path for file reading
       WinPath := TPathUtils.NormalizeToWindows(Issues[I].FilePath);
+
+      // dcc reports the main source (and occasionally units) relative to the
+      // project dir, not to this process' cwd. Resolve there and upgrade the
+      // issue's file field to the absolute path when it resolves.
+      if (ProjectDir <> '') and (not TPath.IsPathRooted(WinPath)) then
+      begin
+        ResolvedPath := TPath.Combine(TPathUtils.NormalizeToWindows(ProjectDir), WinPath);
+        if FileExists(ResolvedPath) then
+        begin
+          WinPath := ResolvedPath;
+          Issues[I].FilePath := TPathUtils.NormalizeForOutput(ResolvedPath);
+        end;
+      end;
 
       if FileExists(WinPath) then
       try

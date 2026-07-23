@@ -2,6 +2,11 @@ unit Compilar.Types;
 
 interface
 
+const
+  /// Tool version — single source of truth. `--version`, the "version" field
+  /// of every JSON output and the dproj VerInfo keys must stay in sync.
+  COMPILER_VERSION = '1.11';
+
 type
   /// Build configuration
   TBuildConfig = (bcDebug, bcRelease);
