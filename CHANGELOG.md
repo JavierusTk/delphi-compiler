@@ -1,5 +1,10 @@
 ﻿# Changelog
 
+## v1.11 - 2026-07-23
+
+- **Self-identifying version**: new `--version` first-arg mode prints `{"tool": "delphi-compiler", "version": "1.11"}` and exits 0; every JSON output (result, `invalid`, `internal_error`, build-event errors) now carries a `"version"` field, and the dproj VerInfo (PE resource) is kept in sync. Rationale: "vX.Y active in PATH" was only verifiable indirectly (deploy commit + behavior probing); a deployed tool must be able to state its own version (verifiability doctrine). Single source of truth: `COMPILER_VERSION` in `Compilar.Types.pas`.
+- **Fix: error context lost when dcc reports a project-relative path** (pre-existing, noted in the 2026-07-23 handoff §9.5). dcc reports the main source (e.g. `Project.dpr(5): error F1026...`) relative to the project dir; context enrichment resolved it against the *process* cwd and silently dropped the `context` block. Now relative issue paths resolve against the project directory, and the issue's `file` field is upgraded to the absolute path when resolution succeeds.
+
 ## v1.10 - 2026-07-23
 
 - **Brief issues by default**: the `issues` array now lists only error/fatal items; warnings and hints stay as counters plus `"issues_omitted": N` and an `"issues_detail"` marker. `--full` restores every item. Rationale: sessions were piping the JSON through ad-hoc minimizers to cut the hint/warning bulk (hundreds of items on CyberMAX packages) — and those filters are exactly where `status` used to get dropped. Now the default output IS the minimal honest projection: counters always complete, error items always complete (with context), nothing left to filter.
