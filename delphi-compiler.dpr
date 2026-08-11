@@ -41,9 +41,50 @@ uses
     WriteFile(Handle, Bytes[0], Length(Bytes), Written, nil);
   end;
 
+  /// First MSBuild-level error line in the raw output, trimmed, or '' when there is none.
+  /// Used only to explain a 'build_failed' result. These lines carry an MSB#### code
+  /// (e.g. "error MSB3061: Unable to delete file ...") and are NOT produced by the Delphi
+  /// compiler, so TOutputParser does not recognise them and they never reach Issues[].
+  function FirstMSBuildErrorLine(const AOutput: string): string;
+  const
+    MaxLen = 500;   // MSBuild can echo enormous lines; this goes into JSON.
+  var
+    Line: string;
+    LowerLine: string;
+  begin
+    for Line in AOutput.Split([sLineBreak, #10]) do
+    begin
+      LowerLine := LowerCase(Line);
+      if (Pos(': error ', LowerLine) > 0) or (Pos('error msb', LowerLine) > 0) then
+      begin
+        Result := Trim(Line);
+        if Length(Result) > MaxLen then
+          Result := Copy(Result, 1, MaxLen) + '...';
+        EXIT;
+      end;
+    end;
+    Result := '';
+  end;
+
+  /// A real pass. Every OTHER status (error, output_locked, build_failed, ...) can and
+  /// often does carry "errors": 0 without a trustworthy binary behind it, so success
+  /// must never be inferred from the error count. Single definition on purpose - the
+  /// rule is applied in three places below and they must not drift apart.
+  function IsPassStatus(const AStatus: string): Boolean;
+  begin
+    Result := (AStatus = 'ok') or (AStatus = 'hints') or (AStatus = 'warnings');
+  end;
+
+const
+  /// Sentinel exit code TMSBuildRunner.RunProcess assigns when it kills MSBuild on
+  /// timeout (Compilar.MSBuild.pas: `ExitCode := -2`). Not an MSBuild exit code -
+  /// it means MSBuild never got to report one.
+  MSBUILD_KILLED_EXIT = -2;
+
 var
   Args: TCompilerArgs;
   ParseError: string;
+  MSBuildFailLine: string;
   MSBuildOutput: string;
   MSBuildExitCode: Integer;
   Issues: TArray<TCompileIssue>;
@@ -156,12 +197,62 @@ begin
       end;
     end;
 
+    // 7b2. MSBuild failed, produced no parseable compiler diagnostic, and the status
+    // computed above is STILL a pass. That combination is the deceptive one: the issue
+    // parser only recognises DCC diagnostics (E####/W####/H####), so an MSBuild-level
+    // failure such as
+    //   error MSB3061: Unable to delete file "Foo.exe". Access to the path ... is denied.
+    // leaves ErrorCount at 0 - not because the code is clean, but because there was
+    // nothing to count. Step 9 would then map 'ok' to exit code 0 and certify a build
+    // that never happened. Reachable whenever no output binary exists to make step 7b
+    // fire: the first build of a project, a malformed .dproj (MSB4025), a failed --test.
+    // Deliberately does NOT touch 'output_locked' (or any other non-pass status): 7b
+    // already diagnosed that case correctly and step 7e prints a stderr warning keyed
+    // on it, which overriding the status here would silently switch off.
+    if (MSBuildExitCode <> 0) and (Result.ErrorCount = 0) and IsPassStatus(Result.Status) then
+    begin
+      Result.Status := 'build_failed';
+      MSBuildFailLine := FirstMSBuildErrorLine(MSBuildOutput);
+
+      // Three quite different situations share "MSBuild failed with no compiler error",
+      // so diagnose before describing. Getting this wrong is not harmless: a message
+      // saying "nothing was compiled" next to a binary that WAS just built is worse
+      // than no message at all.
+      if MSBuildExitCode = MSBUILD_KILLED_EXIT then
+        Result.OutputMessage := 'MSBuild exceeded the internal timeout and was killed, so the build never finished.' +
+          ' The compiler may have run partially - do NOT trust the output binary.'
+      else
+      if Result.OutputPath <> '' then
+        // A binary exists, and step 7b found it fresh - a stale one would have become
+        // 'output_locked', which the guard above excludes. So compile and link both
+        // succeeded and something after them failed: typically a custom <Target> doing
+        // a post-link patch or a signing step. OutputStale stays FALSE on purpose;
+        // 7b measured the timestamp and claiming otherwise would contradict it.
+        Result.OutputMessage := 'The project compiled and linked, but a later MSBuild step failed (exit code ' +
+          IntToStr(MSBuildExitCode) + '). The binary was produced, but whatever that step was meant to do to it did NOT happen.'
+      else
+        // No binary at all: the compiler never got to run.
+        Result.OutputMessage := 'MSBuild exited with code ' + IntToStr(MSBuildExitCode) +
+          ' without reporting any compiler error, so the compiler did not run and NOTHING was compiled.' +
+          ' Do NOT read this as a successful build.';
+
+      if MSBuildFailLine <> '' then
+        Result.OutputMessage := Result.OutputMessage + ' First MSBuild error: ' + MSBuildFailLine;
+      // MSB3061 = Clean could not delete the output binary, i.e. it is still running.
+      if Pos('MSB3061', MSBuildFailLine) > 0 then
+        Result.OutputMessage := Result.OutputMessage +
+          ' The output binary is locked by a running process - close it and recompile.';
+    end;
+
     // 7c. Store PreBuild event info
     if not LPreBuildCmd.IsEmpty then
       Result.PreBuildEvent := LEventResult;
 
-    // 7d. Run PostBuild event (only if compilation succeeded)
-    if (not LPostBuildCmd.IsEmpty) and (Result.ErrorCount = 0) then
+    // 7d. Run PostBuild event - only after a REAL pass. Gating on ErrorCount alone let
+    // the event run against a stale binary: output_locked and build_failed both carry
+    // errors:0 without having produced one, so a signing / patching / deploy step would
+    // silently operate on the PREVIOUS build's output and report success.
+    if (not LPostBuildCmd.IsEmpty) and IsPassStatus(Result.Status) then
     begin
       LEventResult := TBuildEvents.Execute(LPostBuildCmd, LProjectDir);
       Result.PostBuildEvent := LEventResult;
@@ -174,6 +265,11 @@ begin
     if Result.Status = 'output_locked' then
       WriteStderr('[delphi-compiler] NOT A BUILD (status=output_locked): output binary locked by another process; MSBuild /t:rebuild Clean aborted before compiling, so NOTHING was compiled. "errors":0 is meaningless here. Free the lock (close the running app) and recompile.');
 
+    // Same reasoning as 7e, for the no-binary variant: build_failed also reports
+    // "errors": 0, and stdout-only minimizers would show it as a clean build.
+    if Result.Status = 'build_failed' then
+      WriteStderr('[delphi-compiler] NOT A BUILD (status=build_failed): ' + Result.OutputMessage);
+
     // 8. Output JSON (error items only unless --full; counters always complete)
     WriteStdout(TJSONOutput.Generate(Result, Args.FullOutput));
 
@@ -182,8 +278,7 @@ begin
     //    output_locked, ...) reports errors:0 or not, but did NOT produce a
     //    trustworthy binary. Callers key on the exit code (or on status),
     //    never on the error count alone.
-    if (Result.Status = 'ok') or (Result.Status = 'hints')
-       or (Result.Status = 'warnings') then
+    if IsPassStatus(Result.Status) then
       ExitCode := 0
     else
       ExitCode := 1;

@@ -58,7 +58,9 @@ type
 
   /// Final compilation result
   TCompileResult = record
-    Status: string;            // ok, hints, warnings, error, invalid, internal_error
+    Status: string;            // ok, hints, warnings, error, output_locked, build_failed, prebuild_error, invalid, internal_error
+                               // build_failed = MSBuild failed with no compiler diagnostic. ErrorCount is
+                               // 0 there because there is nothing to count, NOT because the code is clean.
     Project: string;           // Project filename only
     ProjectPath: string;       // Full path to .dproj (Linux format)
     Config: string;

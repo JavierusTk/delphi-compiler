@@ -183,12 +183,15 @@ begin
     begin
       SB.Append(P1).Append('"output": "').Append(EscapeJSON(AResult.OutputPath)).Append('",').Append(NL);
       if AResult.OutputStale then
-      begin
         SB.Append(P1).Append('"output_stale": true,').Append(NL);
-        if AResult.OutputMessage <> '' then
-          SB.Append(P1).Append('"output_message": "').Append(EscapeJSON(AResult.OutputMessage)).Append('",').Append(NL);
-      end;
     end;
+
+    // Emitted on its own, NOT nested under "output"/"output_stale". OutputPath is set
+    // only when the binary exists, so nesting dropped the explanation in exactly the
+    // cases that need it most: a build_failed with no binary at all (first build of a
+    // project, a malformed .dproj, a failed --test) carried no reason whatsoever.
+    if AResult.OutputMessage <> '' then
+      SB.Append(P1).Append('"output_message": "').Append(EscapeJSON(AResult.OutputMessage)).Append('",').Append(NL);
 
     // Config warnings (if any)
     if Length(Config.Warnings) > 0 then
