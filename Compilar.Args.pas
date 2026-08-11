@@ -41,6 +41,7 @@ begin
   Args.WSLMode := False;
   Args.WorkspaceRoot := '';
   Args.RebuildCanonical := False;
+  Args.MSBuildProps := nil;
 
   // Check for minimum arguments
   if ParamCount < 1 then
@@ -107,6 +108,16 @@ begin
       Args.ContextLines := StrToIntDef(Copy(Param, 17, MaxInt), 5);
       if Args.ContextLines < 0 then Args.ContextLines := 0;
       if Args.ContextLines > 20 then Args.ContextLines := 20;
+    end
+    else if Param.StartsWith('--property=', True) then
+    begin
+      // Raw MSBuild property: --property=Name=Value (appended as /p:Name=Value). Repeatable.
+      Args.MSBuildProps := Args.MSBuildProps + [Copy(Param, 12, MaxInt)];
+    end
+    else if Param.StartsWith('--define=', True) then
+    begin
+      // Convenience: --define=SYMBOL -> /p:DCC_Define=SYMBOL;$(DCC_Define). Repeatable.
+      Args.MSBuildProps := Args.MSBuildProps + ['DCC_Define=' + Copy(Param, 10, MaxInt) + ';$(DCC_Define)'];
     end
     else if Param.StartsWith('--workspace=', True) then
     begin
