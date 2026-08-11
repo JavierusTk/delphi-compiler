@@ -98,7 +98,14 @@ uses
 
 function TestScratchDir: string;
 begin
-  Result := 'W:\temp\compilar\' + IntToStr(GetCurrentProcessId);
+  // Under the system TEMP rather than a hardcoded 'W:\temp\compilar\': on a machine
+  // with no W: drive, every --test run aborted with
+  //   error MSB3191: Unable to create directory "W:\temp\compilar\<pid>"
+  // before the compiler was invoked, so --test could not work there at all.
+  // GetTempPath is always writable, and the PID suffix keeps runs isolated exactly as
+  // before, so two concurrent --test builds still cannot clean each other's output.
+  Result := TPath.Combine(TPath.Combine(TPath.GetTempPath, 'compilar'),
+                          IntToStr(GetCurrentProcessId));
 end;
 
 function TCompilerArgs.ConfigStr: string;
