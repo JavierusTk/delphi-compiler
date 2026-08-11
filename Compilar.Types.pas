@@ -42,6 +42,7 @@ type
     WSLMode: Boolean;         // Output Linux paths (--wsl flag)
     WorkspaceRoot: string;    // --workspace=ROOT: redirect ALL outputs under ROOT\out (cmx-workspace slots)
     RebuildCanonical: Boolean;// --rebuild-canonical: use /t:rebuild (default is /t:build since workspace mode)
+    MSBuildProps: TArray<string>;  // Extra MSBuild properties from --property=Name=Value (Name=Value, no /p: prefix)
 
     function ConfigStr: string;
     function PlatformStr: string;

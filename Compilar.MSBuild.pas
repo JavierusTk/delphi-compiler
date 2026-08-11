@@ -89,6 +89,7 @@ var
   Target: string;
   ScratchDir: string;
   OutRoot: string;
+  UserProp: string;
 begin
   RSVars := GetRSVarsPath;
   ExtraProps := '';
@@ -159,6 +160,16 @@ begin
     else
       ExtraProps := EnvProps;
   end;
+
+  // User-supplied MSBuild properties (--property=Name=Value / --define=SYMBOL).
+  // Quote the whole Name=Value token so values containing ';' (e.g. a search-path
+  // list or 'FOO;$(DCC_Define)') are kept inside ONE property instead of MSBuild
+  // splitting on ';' into several. '$(...)' still evaluates inside the quotes.
+  // Appended LAST so that e.g. --property=Config=PreRelease overrides the /p:Config=
+  // emitted below: with repeated /p: for the same property, MSBuild's last one wins.
+  for UserProp in Args.MSBuildProps do
+    if UserProp <> '' then
+      ExtraProps := ExtraProps + ' /p:"' + UserProp + '"';
 
   // Build the command line
   // We use cmd /c to run rsvars.bat first, then MSBuild

@@ -33,6 +33,8 @@ The project path can be either Windows (`W:\path\project.dproj`) or Linux/WSL (`
 | `--full` | off | List warning/hint items in `issues` too (default: error items only; warnings/hints stay as counters plus `issues_omitted`) |
 | `--wsl` | off | Output file paths in Linux format (`/mnt/x/...`) |
 | `--version` | — | As sole/first argument: print `{"tool": "delphi-compiler", "version": "..."}` and exit 0 (no compile). Every JSON output also carries a `version` field, and the exe's PE VerInfo matches. |
+| `--property=Name=Value` | — | Pass an arbitrary MSBuild property, forwarded as one quoted `/p:"Name=Value"`. Repeatable. The quoting keeps a value containing `;` inside a single property, and `$(...)` still evaluates. Emitted after the tool's own properties, so `--property=Config=PreRelease` overrides `--config` (MSBuild: last `/p:` wins). |
+| `--define=SYMBOL` | — | Shorthand for `--property=DCC_Define=SYMBOL;$(DCC_Define)`. Repeatable. Adds a conditional define without editing the `.dproj`. |
 
 ### Example
 
