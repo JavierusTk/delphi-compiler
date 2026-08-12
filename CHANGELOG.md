@@ -21,6 +21,16 @@
 - **New JSON fields**: `workspace_source` (`flag|project|env|marker|none`, **always** present in a compilation result and in `prebuild_error`/`postbuild_error` output), `workspace_root` (effective slot root, when there is one), and `workspace_conflict` `{env, marker}` for the non-fatal divergence above. `--version` gains `cmx_ws_contract` (contract §6) so compile skew between the four repos that consume `cmx-slots/lib` by search path is diagnosable without inspecting binaries.
 - `--test` / `--rebuild-canonical` stay incompatible with workspace mode, and now say which rung selected the workspace.
 
+### Command-line parsing rewritten (same release)
+
+The parser was positional: `ParamStr(1)` was *always* the project, options were only read from position 2 on, `--version` was only honoured as the first argument, and anything unrecognized was silently dropped. Three consequences, all fixed here (resolves `BUG-ARG-ORDER-VERSION.md`, now deleted):
+
+- **Informational flags win from any position**: `--version` and `--help` are detected anywhere on the command line; the tool prints and exits 0 **without compiling**, whatever else was passed. `delphi-compiler.exe --workspace=C:\cmx-ws\s3 --version` used to answer `invalid` (exit 2) because `--version` was taken as the project file. Leftmost flag wins if both appear.
+- **`--help` exists** (it never did — it died as "not a full path"). It prints JSON like every other output of this tool: `usage`, `notes`, `exit_codes` and the full `options` table, exit 0. `plan-preflight` already used `delphi-compiler.exe --help` as a probe.
+- **An unknown argument is now an error** (`invalid`, exit 2, naming the argument) instead of being ignored: a typo such as `--workpsace=ROOT` used to produce a silent **canonical** build from inside a slot — precisely the failure the workspace ladder exists to prevent.
+- **The project path is no longer required in position 1**: it is the first argument that is neither an option nor a legacy positional keyword. The shape the slot guard suggests in its block message — `delphi-compiler.exe --workspace=ROOT <project>` — was rejected outright before this release (`Project file must have .dproj extension. Provided: --workspace=...`); it now parses. A second non-option argument is reported instead of ignored.
+- Unchanged: legacy positional keywords (`DEBUG`/`RELEASE`/`WIN32`/`WIN64`/`TEST`), every existing option, and the canonical `<project> [options]` order.
+
 ## v1.11 - 2026-07-23
 
 - **Self-identifying version**: new `--version` first-arg mode prints `{"tool": "delphi-compiler", "version": "1.11"}` and exits 0; every JSON output (result, `invalid`, `internal_error`, build-event errors) now carries a `"version"` field, and the dproj VerInfo (PE resource) is kept in sync. Rationale: "vX.Y active in PATH" was only verifiable indirectly (deploy commit + behavior probing); a deployed tool must be able to state its own version (verifiability doctrine). Single source of truth: `COMPILER_VERSION` in `Compilar.Types.pas`.

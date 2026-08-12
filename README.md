@@ -20,6 +20,8 @@ delphi-compiler.exe <project.dproj> [options]
 
 The project path can be either Windows (`W:\path\project.dproj`) or Linux/WSL (`/mnt/w/path/project.dproj`) format.
 
+Options and the project path may appear **in any order**, and an argument that is not recognized is an error (`invalid`, exit 2) — never silently ignored. `--version` and `--help` are informational in **any** position: they print and exit 0 without compiling.
+
 ### Options
 
 | Option | Default | Description |
@@ -32,7 +34,8 @@ The project path can be either Windows (`W:\path\project.dproj`) or Linux/WSL (`
 | `--raw` | off | Echo raw MSBuild output to stderr |
 | `--full` | off | List warning/hint items in `issues` too (default: error items only; warnings/hints stay as counters plus `issues_omitted`) |
 | `--wsl` | off | Output file paths in Linux format (`/mnt/x/...`) |
-| `--version` | — | As sole/first argument: print `{"tool": "delphi-compiler", "version": "...", "cmx_ws_contract": N}` and exit 0 (no compile). Every JSON output also carries a `version` field, and the exe's PE VerInfo matches. |
+| `--version` | — | In **any** position: print `{"tool": "delphi-compiler", "version": "...", "cmx_ws_contract": N}` and exit 0 (no compile). Every JSON output also carries a `version` field, and the exe's PE VerInfo matches. |
+| `--help` | — | In **any** position: print usage, notes, exit codes and the option table as JSON, and exit 0 (no compile). |
 
 ### Example
 

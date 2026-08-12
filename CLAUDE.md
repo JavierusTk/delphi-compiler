@@ -74,9 +74,18 @@ implements the precedence ladder of
 - JSON: `workspace_source` (`flag|project|env|marker|none`) is always present; `workspace_root` when there is one; `workspace_conflict {env, marker}` when a higher rung arbitrated a divergence.
 - The unit is a **build-time** dependency only (`DCC_UnitSearchPath = ..\..\cmx-slots\lib`, plus an explicit `DCCReference`/`in` clause): the exe carries its own compiled copy and does not need `cmx-slots` at runtime.
 
+## Command-Line Parsing (v1.12)
+
+One pass over every argument in `TArgsParser.Parse`, no positional assumptions:
+
+- **`--version` / `--help` are informational in ANY position** — detected by `TArgsParser.DetectInfoRequest` (called from the `.dpr` *before* `Parse`), print and exit 0 **without compiling**. Leftmost wins if both appear. `--help` emits JSON too (`TJSONOutput.Help`: usage, notes, exit codes, options table): stdout of this tool is always machine-readable.
+- **Unknown argument ⇒ `invalid` (exit 2), naming it.** Before, anything unrecognized was silently dropped, so a typo like `--workpsace=ROOT` produced a *canonical* build from inside a slot.
+- **The project is the first argument that is neither an option nor a legacy positional keyword** (`DEBUG`/`RELEASE`/`WIN32`/`WIN64`/`TEST`) — no longer forced to `ParamStr(1)`, so the slot guard's own `--workspace=ROOT <project>` template parses. A second non-option argument is an error.
+- Single source of truth for the informational flag names: `TArgsParser.InfoFlagOf`, used by both the pre-parse scan and the parse loop (so they are never reported as unknown).
+
 ## Version Identity (v1.11)
 
-`--version` as sole/first argument prints `{"tool": "delphi-compiler", "version": "...", "cmx_ws_contract": N}` and exits 0. Every JSON output carries a `"version"` field and the exe's PE VerInfo matches. Single source of truth: `COMPILER_VERSION` in `Compilar.Types.pas` — bump it together with `CHANGELOG.md` and the dproj `VerInfo_Keys` on every release. `cmx_ws_contract` (v1.12) is `CMX_WS_CONTRACT` from the shared detection unit — compare it across tools to detect compile skew (contract §6).
+`--version`, in any position since v1.12, prints `{"tool": "delphi-compiler", "version": "...", "cmx_ws_contract": N}` and exits 0. Every JSON output carries a `"version"` field and the exe's PE VerInfo matches. Single source of truth: `COMPILER_VERSION` in `Compilar.Types.pas` — bump it together with `CHANGELOG.md` and the dproj `VerInfo_Keys` on every release. `cmx_ws_contract` (v1.12) is `CMX_WS_CONTRACT` from the shared detection unit — compare it across tools to detect compile skew (contract §6).
 
 ## Process Exit Code (v1.9)
 

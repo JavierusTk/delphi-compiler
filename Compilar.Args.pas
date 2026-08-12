@@ -6,13 +6,28 @@ uses
   Compilar.Types;
 
 type
+  /// An informational invocation: the tool prints what was asked for and exits
+  /// 0 WITHOUT compiling, whatever else is on the command line.
+  TInfoRequest = (irNone, irVersion, irHelp);
+
   TArgsParser = class
   public
+    /// Detect an informational flag (--version / --help) in ANY position of the
+    /// command line (v1.12). Before, only ParamStr(1) was inspected, so
+    /// `--workspace=ROOT --version` took `--version` as the project path and
+    /// died with a confusing `invalid` (BUG-ARG-ORDER-VERSION). Leftmost flag
+    /// wins when both are present.
+    class function DetectInfoRequest: TInfoRequest;
+
     /// Parse command line arguments into TCompilerArgs
     /// Returns False if validation fails, with error message in ErrorMsg
     class function Parse(out Args: TCompilerArgs; out ErrorMsg: string): Boolean;
 
   private
+    /// Single source of truth for the informational flag names, shared by
+    /// DetectInfoRequest and by the Parse loop (which must not report them as
+    /// unknown arguments).
+    class function InfoFlagOf(const Param: string): TInfoRequest;
     class function ParseConfig(const Value: string; out Config: TBuildConfig): Boolean;
     class function ParsePlatform(const Value: string; out Platform: TBuildPlatform): Boolean;
     class function ValidateProjectPath(const Path: string; out ErrorMsg: string): Boolean;
@@ -27,10 +42,36 @@ implementation
 uses
   System.SysUtils, System.IOUtils, Compilar.PathUtils, CmxWorkspace.Detect;
 
+class function TArgsParser.InfoFlagOf(const Param: string): TInfoRequest;
+begin
+  if SameText(Param, '--version') then
+    Result := irVersion
+  else if SameText(Param, '--help') then
+    Result := irHelp
+  else
+    Result := irNone;
+end;
+
+class function TArgsParser.DetectInfoRequest: TInfoRequest;
+var
+  I: Integer;
+begin
+  Result := irNone;
+  for I := 1 to ParamCount do
+  begin
+    Result := InfoFlagOf(ParamStr(I));
+    if Result <> irNone then
+      Exit;
+  end;
+end;
+
 class function TArgsParser.Parse(out Args: TCompilerArgs; out ErrorMsg: string): Boolean;
+const
+  USAGE = 'Usage: delphi-compiler.exe <project.dproj> [options] (--help lists every option)';
 var
   I: Integer;
   Param, ParamUpper: string;
+  ProjectGiven: Boolean;
 begin
   Result := False;
 
@@ -52,42 +93,32 @@ begin
   // Check for minimum arguments
   if ParamCount < 1 then
   begin
-    ErrorMsg := 'No project path specified. Usage: delphi-compiler.exe <project.dproj> [options]';
+    ErrorMsg := 'No project path specified. ' + USAGE;
     Exit;
   end;
 
-  // First argument is always the project path
-  Args.ProjectPath := ParamStr(1);
+  Args.ProjectPath := '';
+  ProjectGiven := False;
 
-  // Validate project path
-  if not ValidateProjectPath(Args.ProjectPath, ErrorMsg) then
-    Exit;
-
-  // Normalize paths
-  if TPathUtils.IsLinuxPath(Args.ProjectPath) then
-  begin
-    Args.ProjectPathWin := TPathUtils.LinuxToWindows(Args.ProjectPath);
-  end
-  else if TPathUtils.IsWindowsPath(Args.ProjectPath) then
-  begin
-    Args.ProjectPathWin := Args.ProjectPath;
-    Args.ProjectPath := TPathUtils.WindowsToLinux(Args.ProjectPath);
-  end
-  else
-  begin
-    // Mixed or non-standard path — normalize slashes first, then treat as Windows
-    Args.ProjectPathWin := StringReplace(Args.ProjectPath, '/', '\', [rfReplaceAll]);
-    Args.ProjectPath := TPathUtils.WindowsToLinux(Args.ProjectPathWin);
-  end;
-
-  // Parse remaining arguments
-  for I := 2 to ParamCount do
+  // ONE pass over EVERY argument (v1.12). Options are position-independent, an
+  // unrecognized one is a loud error instead of the old silent skip, and the
+  // project is simply the first argument that is neither an option nor a legacy
+  // positional keyword — so the shape the slot guard suggests
+  // (`--workspace=ROOT <project>`) parses like the historical `<project>
+  // --workspace=ROOT`.
+  for I := 1 to ParamCount do
   begin
     Param := ParamStr(I);
+    if Param = '' then
+      Continue;
     ParamUpper := UpperCase(Param);
 
+    // Informational flags are handled before parsing (see the .dpr): accept
+    // them here so they are never reported as unknown arguments.
+    if InfoFlagOf(Param) <> irNone then
+      Continue
     // Check for --option=value format
-    if Param.StartsWith('--config=', True) then
+    else if Param.StartsWith('--config=', True) then
     begin
       if not ParseConfig(Copy(Param, 10, MaxInt), Args.Config) then
       begin
@@ -162,8 +193,53 @@ begin
     else if ParamUpper = 'TEST' then
     begin
       Args.TestMode := True;
+    end
+    // Anything else that looks like a flag is a typo, not a project: say so
+    // instead of swallowing it (a silently ignored --workpsace=ROOT used to
+    // become a canonical build).
+    else if Param.StartsWith('-') then
+    begin
+      ErrorMsg := 'Unknown argument: ' + Param + '. ' + USAGE;
+      Exit;
+    end
+    else if not ProjectGiven then
+    begin
+      Args.ProjectPath := Param;
+      ProjectGiven := True;
+    end
+    else
+    begin
+      ErrorMsg := 'Unexpected extra argument: ' + Param + ' (the project is already "' +
+        Args.ProjectPath + '"). ' + USAGE;
+      Exit;
     end;
-    // Unknown arguments are silently ignored
+  end;
+
+  if not ProjectGiven then
+  begin
+    ErrorMsg := 'No project path specified. ' + USAGE;
+    Exit;
+  end;
+
+  // Validate project path
+  if not ValidateProjectPath(Args.ProjectPath, ErrorMsg) then
+    Exit;
+
+  // Normalize paths
+  if TPathUtils.IsLinuxPath(Args.ProjectPath) then
+  begin
+    Args.ProjectPathWin := TPathUtils.LinuxToWindows(Args.ProjectPath);
+  end
+  else if TPathUtils.IsWindowsPath(Args.ProjectPath) then
+  begin
+    Args.ProjectPathWin := Args.ProjectPath;
+    Args.ProjectPath := TPathUtils.WindowsToLinux(Args.ProjectPath);
+  end
+  else
+  begin
+    // Mixed or non-standard path — normalize slashes first, then treat as Windows
+    Args.ProjectPathWin := StringReplace(Args.ProjectPath, '/', '\', [rfReplaceAll]);
+    Args.ProjectPath := TPathUtils.WindowsToLinux(Args.ProjectPathWin);
   end;
 
   // Resolve the effective workspace BEFORE any path translation: the ladder

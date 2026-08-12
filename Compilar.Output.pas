@@ -22,6 +22,11 @@ type
     /// Generate JSON for the --version query (tool identity, no compile)
     class function Version: string;
 
+    /// Generate JSON for the --help query (usage, options, exit codes; no
+    /// compile). JSON like every other output: stdout of this tool is always
+    /// machine-readable, help included.
+    class function Help: string;
+
     /// Generate JSON for internal error
     class function InternalError(const ErrorMsg: string): string;
 
@@ -304,6 +309,52 @@ begin
     Pad(1) + '"tool": "delphi-compiler",' + NL +
     Pad(1) + '"version": "' + COMPILER_VERSION + '",' + NL +
     Pad(1) + '"cmx_ws_contract": ' + IntToStr(CMX_WS_CONTRACT) + NL +
+    '}';
+end;
+
+class function TJSONOutput.Help: string;
+
+  function Opt(const AFlag, ADefault, ADesc: string; ALast: Boolean = False): string;
+  begin
+    Result := Pad(2) + '{"flag": "' + EscapeJSON(AFlag) + '", "default": "' +
+      EscapeJSON(ADefault) + '", "description": "' + EscapeJSON(ADesc) + '"}';
+    if not ALast then
+      Result := Result + ',';
+    Result := Result + NL;
+  end;
+
+begin
+  Result := '{' + NL +
+    Pad(1) + '"tool": "delphi-compiler",' + NL +
+    Pad(1) + '"version": "' + COMPILER_VERSION + '",' + NL +
+    Pad(1) + '"usage": "delphi-compiler.exe <project.dproj> [options]",' + NL +
+    Pad(1) + '"notes": [' + NL +
+    Pad(2) + '"Options and the project path may appear in any order; an unrecognized argument is an error (status invalid, exit 2), never ignored.",' + NL +
+    Pad(2) + '"--version and --help are informational in any position: they print and exit 0 without compiling.",' + NL +
+    Pad(2) + '"Project path accepts Windows (W:\\...) or WSL (/mnt/w/...) form.",' + NL +
+    Pad(2) + '"A pass is status in {ok, hints, warnings} — never infer success from errors:0 alone."' + NL +
+    Pad(1) + '],' + NL +
+    Pad(1) + '"exit_codes": {' + NL +
+    Pad(2) + '"0": "pass (status ok|hints|warnings) or informational query",' + NL +
+    Pad(2) + '"1": "build failure (error, output_locked, prebuild_error)",' + NL +
+    Pad(2) + '"2": "invalid (bad arguments, project not found, workspace guard)",' + NL +
+    Pad(2) + '"3": "internal_error (MSBuild could not run, unexpected exception)"' + NL +
+    Pad(1) + '},' + NL +
+    Pad(1) + '"options": [' + NL +
+    Opt('--config=Debug|Release', 'Debug', 'Build configuration') +
+    Opt('--platform=Win32|Win64', 'Win32', 'Target platform') +
+    Opt('--max-errors=N', '3', 'Max error items included in the output (1-10)') +
+    Opt('--context-lines=N', '5', 'Lines of source context around each error (0-20)') +
+    Opt('--workspace=ROOT', '(resolution ladder)', 'Build inside a cmx-workspace slot: all outputs under ROOT\out. Highest rung of the identity ladder (flag > project path > validated CMX_WORKSPACE > marker-walk > none)') +
+    Opt('--rebuild-canonical', 'off', 'Use MSBuild /t:rebuild instead of /t:build. Forbidden in workspace mode') +
+    Opt('--test', 'off', 'Compile to a per-process temp folder. Mutually exclusive with workspace mode') +
+    Opt('--raw', 'off', 'Echo raw MSBuild output to stderr') +
+    Opt('--full', 'off', 'List warning/hint items in issues too (default: error items only)') +
+    Opt('--wsl', 'off', 'Output file paths in Linux form (/mnt/x/...)') +
+    Opt('--version', '-', 'Print tool identity JSON and exit 0 (no compile)') +
+    Opt('--help', '-', 'Print this JSON and exit 0 (no compile)') +
+    Opt('DEBUG|RELEASE|WIN32|WIN64|TEST', '-', 'Legacy positional keywords, equivalent to the matching option', True) +
+    Pad(1) + ']' + NL +
     '}';
 end;
 
