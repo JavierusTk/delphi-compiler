@@ -31,6 +31,34 @@ type
     Context: TArray<string>;  // Source code lines around error
   end;
 
+  /// cmx-workspace identity of an `invalid` (exit 2) whose CAUSE is the
+  /// resolution ladder (v1.12, fix post-review R1). Until this fix the fatal
+  /// JSON carried the slots involved ONLY inside the human sentence of
+  /// "error", so a JSON client had to parse prose to recover them — exactly
+  /// the case (conflict / mismatch) where a caller most needs the two slot
+  /// ids. Ordinary argument errors (unknown flag, project not found, bad
+  /// --config) leave this empty and keep the historical {status, version,
+  /// error} shape: no workspace field ever appears for a non-workspace cause.
+  TCmxWsFailure = record
+    Present: Boolean;  // emit the workspace_* fields in the invalid JSON
+    Source: string;    // 'flag'|'project'|'env'|'marker'|'none' — the rung the failure is ABOUT
+                       // ('none' = the ladder could adopt no identity at all)
+    KeyA: string;      // workspace_conflict: name of the first side involved...
+    SlotA: string;     // ...and its slot id
+    KeyB: string;      // '' when the failure involves no PAIR of slots
+    SlotB: string;
+
+    procedure Clear;
+    /// Failure attributable to a single rung: only workspace_source travels.
+    procedure Note(const ASource: string);
+    /// Failure with TWO slots involved. Key pairs in use:
+    ///   'env'/'marker'        — env <> CWD-marker conflict (same shape as the
+    ///                           non-fatal workspace_conflict of a build result)
+    ///   'project'/'workspace' — the project belongs to one slot and the
+    ///                           effective workspace is another
+    procedure NoteConflict(const ASource, AKeyA, ASlotA, AKeyB, ASlotB: string);
+  end;
+
   /// Parsed command line arguments
   TCompilerArgs = record
     ProjectPath: string;      // Full path to .dproj (Linux format)
@@ -49,6 +77,11 @@ type
     WorkspaceSource: TCmxWsSource;  // which rung of the ladder set WorkspaceRoot
     ConflictEnvSlot: string;        // non-fatal env<>marker conflict: slot id seen in CMX_WORKSPACE
     ConflictMarkerSlot: string;     // ...and the one the CWD marker-walk found ('' when no conflict)
+    /// Structured identity of a FATAL workspace failure. Written by the parser
+    /// on the failing path and read by the caller AFTER Parse returns False
+    /// (the record is passed by reference, so what the parser wrote survives),
+    /// so the `invalid` JSON can state the slots instead of only narrating them.
+    WsFailure: TCmxWsFailure;
 
     function ConfigStr: string;
     function PlatformStr: string;
@@ -111,6 +144,33 @@ uses
 function TestScratchDir: string;
 begin
   Result := 'W:\temp\compilar\' + IntToStr(GetCurrentProcessId);
+end;
+
+procedure TCmxWsFailure.Clear;
+begin
+  Present := False;
+  Source := '';
+  KeyA := '';
+  SlotA := '';
+  KeyB := '';
+  SlotB := '';
+end;
+
+procedure TCmxWsFailure.Note(const ASource: string);
+begin
+  Clear;
+  Present := True;
+  Source := ASource;
+end;
+
+procedure TCmxWsFailure.NoteConflict(const ASource, AKeyA, ASlotA, AKeyB,
+  ASlotB: string);
+begin
+  Note(ASource);
+  KeyA := AKeyA;
+  SlotA := ASlotA;
+  KeyB := AKeyB;
+  SlotB := ASlotB;
 end;
 
 function TCompilerArgs.ConfigStr: string;

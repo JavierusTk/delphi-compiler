@@ -16,8 +16,17 @@ type
     class function Generate(const AResult: TCompileResult;
       AFullIssues: Boolean = True): string;
 
-    /// Generate JSON for invalid arguments
-    class function Invalid(const ErrorMsg: string): string;
+    /// Generate JSON for invalid arguments (no workspace cause: historical
+    /// {status, version, error} shape, no workspace field whatsoever)
+    class function Invalid(const ErrorMsg: string): string; overload;
+
+    /// Same, plus the STRUCTURED identity of a failure caused by the
+    /// cmx-workspace resolution ladder (v1.12 fix, post-review R1):
+    /// `workspace_source` and, for the two-slot failures, `workspace_conflict`
+    /// — so a JSON client never has to parse the prose of `error` to learn
+    /// which slots collided. Emits nothing extra when AWs.Present is False.
+    class function Invalid(const ErrorMsg: string;
+      const AWs: TCmxWsFailure): string; overload;
 
     /// Generate JSON for the --version query (tool identity, no compile)
     class function Version: string;
@@ -291,10 +300,41 @@ begin
 end;
 
 class function TJSONOutput.Invalid(const ErrorMsg: string): string;
+var
+  NoWs: TCmxWsFailure;
 begin
+  NoWs.Clear;
+  Result := Invalid(ErrorMsg, NoWs);
+end;
+
+class function TJSONOutput.Invalid(const ErrorMsg: string;
+  const AWs: TCmxWsFailure): string;
+var
+  WsFields: string;
+begin
+  WsFields := '';
+  if AWs.Present then
+  begin
+    // Which rung of the §5.3 ladder this fatal is ABOUT ('none' = no identity
+    // could be adopted, which is itself the failure in the conflict family).
+    WsFields := Pad(1) + '"workspace_source": "' + EscapeJSON(AWs.Source) + '",' + NL;
+    // Both slots of a two-sided failure. Keys name the sides and therefore the
+    // kind: {env, marker} for the env<>CWD-marker conflict (identical shape to
+    // the non-fatal workspace_conflict of a build result), {project, workspace}
+    // for the project<>effective-workspace mismatch. When a fatal carries one,
+    // it describes the conflict that CAUSED the exit.
+    if AWs.KeyA <> '' then
+      WsFields := WsFields +
+        Pad(1) + '"workspace_conflict": {' + NL +
+        Pad(2) + '"' + EscapeJSON(AWs.KeyA) + '": "' + EscapeJSON(AWs.SlotA) + '",' + NL +
+        Pad(2) + '"' + EscapeJSON(AWs.KeyB) + '": "' + EscapeJSON(AWs.SlotB) + '"' + NL +
+        Pad(1) + '},' + NL;
+  end;
+
   Result := '{' + NL +
     Pad(1) + '"status": "invalid",' + NL +
     Pad(1) + '"version": "' + COMPILER_VERSION + '",' + NL +
+    WsFields +
     Pad(1) + '"error": "' + EscapeJSON(ErrorMsg) + '"' + NL +
     '}';
 end;
