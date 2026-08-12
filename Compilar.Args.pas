@@ -89,6 +89,9 @@ begin
   Args.WorkspaceSource := cwsrcNone;
   Args.ConflictEnvSlot := '';
   Args.ConflictMarkerSlot := '';
+  // No workspace failure until a workspace check says otherwise: an ordinary
+  // argument error must NOT grow workspace fields in its JSON.
+  Args.WsFailure.Clear;
 
   // Check for minimum arguments
   if ParamCount < 1 then
@@ -157,6 +160,8 @@ begin
         SetLength(Args.WorkspaceRoot, Length(Args.WorkspaceRoot) - 1);
       if not DirectoryExists(Args.WorkspaceRoot) then
       begin
+        // The flag rung itself is what failed (the ladder has not run yet).
+        Args.WsFailure.Note('flag');
         ErrorMsg := 'Workspace root not found: ' + Args.WorkspaceRoot;
         Exit;
       end;
@@ -243,7 +248,9 @@ begin
   end;
 
   // Resolve the effective workspace BEFORE any path translation: the ladder
-  // decides whether this run is a slot build at all (v1.12).
+  // decides whether this run is a slot build at all (v1.12). Every failing exit
+  // of ResolveWorkspace also fills Args.WsFailure, so the `invalid` JSON states
+  // the identity in fields instead of only narrating it.
   if not ResolveWorkspace(Args, ErrorMsg) then
     Exit;
 
@@ -258,12 +265,14 @@ begin
       Args.ProjectPath := TPathUtils.WindowsToLinux(Args.ProjectPathWin);
       if not FileExists(Args.ProjectPathWin) then
       begin
+        Args.WsFailure.Note(CmxWsSourceToStr(Args.WorkspaceSource));
         ErrorMsg := 'Workspace copy of the project not found: ' + Args.ProjectPathWin;
         Exit;
       end;
     end
     else if Args.ProjectPathWin.StartsWith('W:\', True) then
     begin
+      Args.WsFailure.Note(CmxWsSourceToStr(Args.WorkspaceSource));
       ErrorMsg := 'In workspace mode the project must live under the workspace (or be given as W:\Packages290\... for auto-translation). Got: ' + Args.ProjectPathWin;
       Exit;
     end;
@@ -272,12 +281,14 @@ begin
   // Mutually exclusive / incoherent combinations
   if (Args.WorkspaceRoot <> '') and Args.TestMode then
   begin
+    Args.WsFailure.Note(CmxWsSourceToStr(Args.WorkspaceSource));
     ErrorMsg := 'Workspace mode (source=' + CmxWsSourceToStr(Args.WorkspaceSource) +
       ', root=' + Args.WorkspaceRoot + ') and --test are mutually exclusive (a workspace build already writes to ROOT\out).';
     Exit;
   end;
   if (Args.WorkspaceRoot <> '') and Args.RebuildCanonical then
   begin
+    Args.WsFailure.Note(CmxWsSourceToStr(Args.WorkspaceSource));
     ErrorMsg := '--rebuild-canonical is not allowed inside a workspace (/t:rebuild must never run against a slot). Workspace source=' +
       CmxWsSourceToStr(Args.WorkspaceSource) + ', root=' + Args.WorkspaceRoot + '.';
     Exit;
@@ -325,6 +336,8 @@ begin
     ProjDetect := DetectCmxWorkspaceBounded(ExtractFileDir(Args.ProjectPathWin));
     if ProjDetect.Marker.State <> cwsFound then
     begin
+      // The rung under way is `project`: one slot involved, no pair.
+      Args.WsFailure.Note('project');
       ErrorMsg := Format('The project lives under cmx-workspace slot "%s" but that slot has no usable %s (%s): %s. ' +
         'Repair the slot (cmx-workspace doctor / re-provision) or pass an explicit --workspace=ROOT.',
         [ProjectSlot, CMX_WS_MARKER_FILENAME, CmxWsStateToStr(ProjDetect.Marker.State),
@@ -338,6 +351,9 @@ begin
   begin
     // No flag and no project-derived identity: the two automatic channels
     // disagree and nothing can arbitrate. Never adopt either side silently.
+    // source=none: NO rung was adopted — that is precisely the failure.
+    Args.WsFailure.NoteConflict('none', 'env', Detection.Env.SlotId,
+      'marker', Detection.Marker.SlotId);
     ErrorMsg := Format('cmx-workspace identity CONFLICT: %s="%s" resolves to slot "%s", but the marker found by walking up from the current directory (%s) belongs to slot "%s". ' +
       'Pass --workspace=ROOT explicitly to disambiguate.',
       [CMX_WS_ENV_NAME, Detection.Env.RawValue, Detection.Env.SlotId,
@@ -362,6 +378,7 @@ begin
   begin
     // A marker file EXISTS above the CWD and cannot be trusted: loud error,
     // never a silent canonical build (§2.2).
+    Args.WsFailure.Note('none');
     ErrorMsg := Format('A cmx-workspace marker was found while walking up from the current directory but it is NOT usable: %s. ' +
       'Repair the slot or pass an explicit --workspace=ROOT.', [Detection.Marker.Detail]);
     Exit;
@@ -379,6 +396,7 @@ begin
        (Args.ProjectPathWin.StartsWith('W:\', True) or
         Args.ProjectPathWin.StartsWith('C:\cmx-ws\', True)) then
     begin
+      Args.WsFailure.Note('none');
       ErrorMsg := Format('%s is set but cannot be trusted as a slot identity (%s), and no other source (project path, marker) applies. ' +
         'Compiling "%s" without --workspace would write to the SHARED canonical output dirs. ' +
         'Pass --workspace=ROOT, run from inside the slot, or clear %s.',
@@ -394,6 +412,9 @@ begin
     WsSlot := CmxSlotIdFromPath(Args.WorkspaceRoot);
     if (WsSlot <> '') and not SameText(WsSlot, ProjectSlot) then
     begin
+      // Two slots involved, and here a rung WAS adopted: report which one.
+      Args.WsFailure.NoteConflict(CmxWsSourceToStr(Args.WorkspaceSource),
+        'project', ProjectSlot, 'workspace', WsSlot);
       ErrorMsg := Format('cmx-workspace slot mismatch: the project belongs to slot "%s" (%s) but the effective workspace is slot "%s" (%s, source=%s). ' +
         'Build the slot "%s" copy of the project, or point --workspace at "%s".',
         [ProjectSlot, Args.ProjectPathWin, WsSlot, Args.WorkspaceRoot,
@@ -404,6 +425,7 @@ begin
 
   if (Args.WorkspaceRoot <> '') and not DirectoryExists(Args.WorkspaceRoot) then
   begin
+    Args.WsFailure.Note(CmxWsSourceToStr(Args.WorkspaceSource));
     ErrorMsg := Format('Workspace root not found: %s (source=%s)',
       [Args.WorkspaceRoot, CmxWsSourceToStr(Args.WorkspaceSource)]);
     Exit;

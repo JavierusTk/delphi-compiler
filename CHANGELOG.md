@@ -21,6 +21,19 @@
 - **New JSON fields**: `workspace_source` (`flag|project|env|marker|none`, **always** present in a compilation result and in `prebuild_error`/`postbuild_error` output), `workspace_root` (effective slot root, when there is one), and `workspace_conflict` `{env, marker}` for the non-fatal divergence above. `--version` gains `cmx_ws_contract` (contract §6) so compile skew between the four repos that consume `cmx-slots/lib` by search path is diagnosable without inspecting binaries.
 - `--test` / `--rebuild-canonical` stay incompatible with workspace mode, and now say which rung selected the workspace.
 
+- **Fix (post-review R1, still v1.12): the FATAL workspace errors state the identity in FIELDS, not only in prose.** The structured fields above reached only the *compilation result* JSON; when the ladder itself was the cause of the `invalid` (exit 2) the output was `{status, version, error}`, and the slots involved lived exclusively inside the human sentence — a JSON client had to parse prose precisely in the case where it most needs the two slot ids. Now:
+  - `workspace_source` is emitted in every `invalid` **whose cause is the workspace resolution**, and names the rung the failure is *about*: `flag` (e.g. `--workspace=ROOT` pointing at a missing directory), `project` (a `.dproj` under `C:\cmx-ws\sX` whose slot has no usable marker), or the rung already adopted when a later check fails (slot mismatch, `--test` / `--rebuild-canonical` exclusivity, translation of the project into the slot). It is `none` when the failure is precisely that **no** identity could be adopted: env≠marker conflict, unusable marker above the CWD, present-but-unvalidatable env.
+  - `workspace_conflict` now also appears in the fatal JSON, carrying the **two** slots involved; its keys name the sides, so the kind of collision is self-describing and the env/marker case keeps the exact shape of the non-fatal field:
+
+    | Fatal failure | `workspace_conflict` | `workspace_source` |
+    |---|---|---|
+    | env ≠ CWD-marker, nothing arbitrates | `{"env": "s4", "marker": "s3"}` | `none` |
+    | project slot ≠ effective workspace slot | `{"project": "s3", "workspace": "s4"}` | the adopted rung (e.g. `flag`) |
+
+    In an `invalid`, `workspace_conflict` describes the collision that **caused** the exit: if a non-fatal env/marker divergence coexists with a fatal mismatch, the fatal one is the one reported.
+  - **Invalids with a non-workspace cause are unchanged**: an unknown argument, a missing project or a bad `--config` still emit exactly `{status, version, error}` — no `workspace_source`, no empty conflict object. `--version`, `--help` and successful compilations are untouched.
+  - Plumbing: `TCmxWsFailure` (`Compilar.Types.pas`, a field of `TCompilerArgs`) is filled by `TArgsParser` at every failing workspace exit and rendered by the new `TJSONOutput.Invalid(ErrorMsg, WsFailure)` overload; the single-argument `Invalid` remains for non-workspace errors.
+
 ### Command-line parsing rewritten (same release)
 
 The parser was positional: `ParamStr(1)` was *always* the project, options were only read from position 2 on, `--version` was only honoured as the first argument, and anything unrecognized was silently dropped. Three consequences, all fixed here (resolves `BUG-ARG-ORDER-VERSION.md`, now deleted):

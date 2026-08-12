@@ -83,7 +83,9 @@ begin
     // 1. Parse command line arguments
     if not TArgsParser.Parse(Args, ParseError) then
     begin
-      WriteStdout(TJSONOutput.Invalid(ParseError));
+      // Args.WsFailure is filled only when the CAUSE is the workspace ladder;
+      // an ordinary argument error emits the historical shape unchanged.
+      WriteStdout(TJSONOutput.Invalid(ParseError, Args.WsFailure));
       ExitCode := 2;
       Exit;
     end;
