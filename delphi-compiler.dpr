@@ -1,4 +1,4 @@
-program DelphiCompiler;
+﻿program DelphiCompiler;
 
 {$APPTYPE CONSOLE}
 
@@ -8,6 +8,7 @@ uses
   Winapi.Windows,
   System.SysUtils,
   System.Diagnostics,
+  CmxWorkspace.Detect in '..\..\cmx-slots\lib\CmxWorkspace.Detect.pas',
   Compilar.Types in 'Compilar.Types.pas',
   Compilar.Args in 'Compilar.Args.pas',
   Compilar.Config in 'Compilar.Config.pas',

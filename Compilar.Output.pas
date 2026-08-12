@@ -1,4 +1,4 @@
-unit Compilar.Output;
+﻿unit Compilar.Output;
 
 interface
 
@@ -40,7 +40,7 @@ implementation
 
 uses
   System.SysUtils, System.IOUtils, System.Classes,
-  Compilar.Config, Compilar.PathUtils;
+  Compilar.Config, Compilar.PathUtils, CmxWorkspace.Detect;
 
 const
   INDENT_SIZE = 2;
@@ -179,6 +179,21 @@ begin
     SB.Append(P1).Append('"config": "').Append(EscapeJSON(AResult.Config)).Append('",').Append(NL);
     SB.Append(P1).Append('"platform": "').Append(EscapeJSON(AResult.Platform)).Append('",').Append(NL);
 
+    // cmx-workspace identity (v1.12): which rung of the §5.3 ladder decided the
+    // build overlay. ALWAYS present — 'none' is a canonical build.
+    SB.Append(P1).Append('"workspace_source": "').Append(EscapeJSON(AResult.WorkspaceSource)).Append('",').Append(NL);
+    if AResult.WorkspaceRoot <> '' then
+      SB.Append(P1).Append('"workspace_root": "').Append(EscapeJSON(AResult.WorkspaceRoot)).Append('",').Append(NL);
+    // Non-fatal env<>marker divergence (a higher rung arbitrated it): reported
+    // so the caller can see the ambiguity that was NOT used to decide.
+    if (AResult.ConflictEnvSlot <> '') or (AResult.ConflictMarkerSlot <> '') then
+    begin
+      SB.Append(P1).Append('"workspace_conflict": {').Append(NL);
+      SB.Append(P2).Append('"env": "').Append(EscapeJSON(AResult.ConflictEnvSlot)).Append('",').Append(NL);
+      SB.Append(P2).Append('"marker": "').Append(EscapeJSON(AResult.ConflictMarkerSlot)).Append('"').Append(NL);
+      SB.Append(P1).Append('},').Append(NL);
+    end;
+
     if AResult.OutputPath <> '' then
     begin
       SB.Append(P1).Append('"output": "').Append(EscapeJSON(AResult.OutputPath)).Append('",').Append(NL);
@@ -281,9 +296,14 @@ end;
 
 class function TJSONOutput.Version: string;
 begin
+  // cmx_ws_contract surfaces the detection-contract version compiled INTO this
+  // exe (MARKER-CONTRACT.md §6): cmx-slots/lib ships no versioned DCP, so each
+  // consumer recompiles its own copy and can drift. Comparing this number
+  // between tools is how that skew is detected.
   Result := '{' + NL +
     Pad(1) + '"tool": "delphi-compiler",' + NL +
-    Pad(1) + '"version": "' + COMPILER_VERSION + '"' + NL +
+    Pad(1) + '"version": "' + COMPILER_VERSION + '",' + NL +
+    Pad(1) + '"cmx_ws_contract": ' + IntToStr(CMX_WS_CONTRACT) + NL +
     '}';
 end;
 
@@ -310,6 +330,7 @@ begin
     P1 + '"project_path": "' + EscapeJSON(TPathUtils.NormalizeForOutput(Args.ProjectPathWin)) + '",' + NL +
     P1 + '"config": "' + EscapeJSON(Args.ConfigStr) + '",' + NL +
     P1 + '"platform": "' + EscapeJSON(Args.PlatformStr) + '",' + NL +
+    P1 + '"workspace_source": "' + EscapeJSON(CmxWsSourceToStr(Args.WorkspaceSource)) + '",' + NL +
     P1 + '"build_event": {' + NL +
     P2 + '"type": "' + EscapeJSON(AEventType) + '",' + NL +
     P2 + '"command": "' + EscapeJSON(AEvent.Command) + '",' + NL +
