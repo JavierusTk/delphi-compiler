@@ -1,4 +1,4 @@
-program DelphiCompiler;
+﻿program DelphiCompiler;
 
 {$APPTYPE CONSOLE}
 
@@ -8,6 +8,7 @@ uses
   Winapi.Windows,
   System.SysUtils,
   System.Diagnostics,
+  CmxWorkspace.Detect in '..\..\cmx-slots\lib\CmxWorkspace.Detect.pas',
   Compilar.Types in 'Compilar.Types.pas',
   Compilar.Args in 'Compilar.Args.pas',
   Compilar.Config in 'Compilar.Config.pas',
@@ -61,12 +62,22 @@ var
 begin
 
   try
-    // 0. Version query (exclusive first-arg mode): tool identity, no compile.
-    if (ParamCount >= 1) and SameText(ParamStr(1), '--version') then
-    begin
-      WriteStdout(TJSONOutput.Version);
-      ExitCode := 0;
-      Exit;
+    // 0. Informational flags (--version / --help) win from ANY position and
+    //    never compile (v1.12): asking a tool what it is must not depend on
+    //    where the question sits on the command line.
+    case TArgsParser.DetectInfoRequest of
+      irVersion:
+        begin
+          WriteStdout(TJSONOutput.Version);
+          ExitCode := 0;
+          Exit;
+        end;
+      irHelp:
+        begin
+          WriteStdout(TJSONOutput.Help);
+          ExitCode := 0;
+          Exit;
+        end;
     end;
 
     // 1. Parse command line arguments

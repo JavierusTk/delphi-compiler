@@ -1,11 +1,14 @@
-unit Compilar.Types;
+﻿unit Compilar.Types;
 
 interface
+
+uses
+  CmxWorkspace.Detect;
 
 const
   /// Tool version — single source of truth. `--version`, the "version" field
   /// of every JSON output and the dproj VerInfo keys must stay in sync.
-  COMPILER_VERSION = '1.11';
+  COMPILER_VERSION = '1.12';
 
 type
   /// Build configuration
@@ -40,8 +43,12 @@ type
     RawOutput: Boolean;       // Echo raw MSBuild output to stderr
     FullOutput: Boolean;      // --full: list warning/hint items too (default: error items only)
     WSLMode: Boolean;         // Output Linux paths (--wsl flag)
-    WorkspaceRoot: string;    // --workspace=ROOT: redirect ALL outputs under ROOT\out (cmx-workspace slots)
+    WorkspaceRoot: string;    // effective cmx-workspace slot root: ALL outputs go under ROOT\out
     RebuildCanonical: Boolean;// --rebuild-canonical: use /t:rebuild (default is /t:build since workspace mode)
+    // --- cmx-workspace identity (v1.12, MARKER-CONTRACT.md §5.3 ladder) ---
+    WorkspaceSource: TCmxWsSource;  // which rung of the ladder set WorkspaceRoot
+    ConflictEnvSlot: string;        // non-fatal env<>marker conflict: slot id seen in CMX_WORKSPACE
+    ConflictMarkerSlot: string;     // ...and the one the CWD marker-walk found ('' when no conflict)
 
     function ConfigStr: string;
     function PlatformStr: string;
@@ -76,6 +83,11 @@ type
     Truncated: Boolean;        // True if MaxErrors cut the issue list short
     TotalIssuesFound: Integer; // Total issues detected before truncation
     Issues: TArray<TCompileIssue>;
+    // --- cmx-workspace identity (v1.12) ---
+    WorkspaceSource: string;      // 'flag' | 'project' | 'env' | 'marker' | 'none'
+    WorkspaceRoot: string;        // effective slot root ('' when source = none)
+    ConflictEnvSlot: string;      // informational env<>marker conflict (both '' when none)
+    ConflictMarkerSlot: string;
 
     class function Create(const Args: TCompilerArgs;
       const AIssues: TArray<TCompileIssue>; AExitCode: Integer;
@@ -138,6 +150,10 @@ begin
   Result.OutputStale := False;
   Result.PreBuildEvent.Executed := False;
   Result.PostBuildEvent.Executed := False;
+  Result.WorkspaceSource := CmxWsSourceToStr(Args.WorkspaceSource);
+  Result.WorkspaceRoot := Args.WorkspaceRoot;
+  Result.ConflictEnvSlot := Args.ConflictEnvSlot;
+  Result.ConflictMarkerSlot := Args.ConflictMarkerSlot;
 
   // Count issues by type
   for Issue in AIssues do
