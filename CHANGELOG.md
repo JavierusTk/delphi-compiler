@@ -1,5 +1,26 @@
 ﻿# Changelog
 
+## v1.12 - 2026-08-12
+
+- **Workspace resolution ladder** (cmx-workspace slot identity). Until v1.11 the only sources of slot identity were the `--workspace=` flag and a raw, unvalidated `CMX_WORKSPACE`; the marker file `.cmx-workspace.json` was never opened. The tool now implements the full precedence ladder of [`W:\cmx-slots\lib\MARKER-CONTRACT.md`](../../cmx-slots/lib/MARKER-CONTRACT.md) §5.3 by consuming the reference unit `CmxWorkspace.Detect.pas` (compiled INTO the exe — build-time search path only, no runtime dependency on `cmx-slots`):
+
+  | Rung | Source | When it applies |
+  |------|--------|-----------------|
+  | 1 | `flag` | `--workspace=ROOT` given — conscious human intervention, always wins |
+  | 2 | `project` | the `.dproj` lives under `C:\cmx-ws\sX\...` ⇒ workspace = root of `sX`. Immune to the WSL junction asymmetry (contract §4.3): the path comes from the invocation, not from a CWD that WSL may have resolved through a junction |
+  | 3 | `env` | `CMX_WORKSPACE` **validated** against the marker of the root it points at (§5.3). Was a hard error in v1.7–v1.11; a validated env is now adopted |
+  | 4 | `marker` | marker-walk upwards from the CWD (§5.1) — best-effort last net |
+  | 5 | `none` | no slot anchor: canonical build, exactly as before |
+
+- **New failure modes, all `invalid` (exit 2), never a silent canonical build** (contract §2.2 for CLI tools):
+  - **workspace↔project mismatch**, from *any* source including an explicit `--workspace`: a project inside slot `sX` built with slot `sY`'s overlay is rejected, naming both slots.
+  - **env≠marker conflict** with no flag and no project-derived identity: neither side is adopted; the error demands an explicit `--workspace=ROOT`.
+  - **Unusable marker**: a `.cmx-workspace.json` that exists but does not parse or lacks a core field (§1.2), and a path with the *shape* of a slot root whose marker is missing (§2.1) when the project itself lives under `cmx-ws`.
+  - **Env present but not validatable** (orphan root after teardown, non-slot shape, marker that disagrees) plus a `W:\`/`C:\cmx-ws\` project: this is the residue of the v1.7 session guard, which the ladder otherwise subsumes.
+  - An env≠marker divergence that a *higher* rung already arbitrated is **not** fatal: it is reported as `workspace_conflict` in the JSON.
+- **New JSON fields**: `workspace_source` (`flag|project|env|marker|none`, **always** present in a compilation result and in `prebuild_error`/`postbuild_error` output), `workspace_root` (effective slot root, when there is one), and `workspace_conflict` `{env, marker}` for the non-fatal divergence above. `--version` gains `cmx_ws_contract` (contract §6) so compile skew between the four repos that consume `cmx-slots/lib` by search path is diagnosable without inspecting binaries.
+- `--test` / `--rebuild-canonical` stay incompatible with workspace mode, and now say which rung selected the workspace.
+
 ## v1.11 - 2026-07-23
 
 - **Self-identifying version**: new `--version` first-arg mode prints `{"tool": "delphi-compiler", "version": "1.11"}` and exits 0; every JSON output (result, `invalid`, `internal_error`, build-event errors) now carries a `"version"` field, and the dproj VerInfo (PE resource) is kept in sync. Rationale: "vX.Y active in PATH" was only verifiable indirectly (deploy commit + behavior probing); a deployed tool must be able to state its own version (verifiability doctrine). Single source of truth: `COMPILER_VERSION` in `Compilar.Types.pas`.
