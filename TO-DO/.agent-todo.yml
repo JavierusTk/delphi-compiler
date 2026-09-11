@@ -1,0 +1,5 @@
+# agent-todo registry config — created by `agent-todo add --create-registry`.
+# repo_id is this registry's stable identity: every item uid is `<repo_id>:<ID>`,
+# so renaming it breaks every citation. Doc: /mnt/w/agent-todo/CLAUDE.md
+schema: agent-todo/v1
+repo_id: delphi-compiler
