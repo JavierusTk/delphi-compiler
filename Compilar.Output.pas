@@ -398,7 +398,7 @@ begin
     Opt('--context-lines=N', '5', 'Lines of source context around each error (0-20)') +
     Opt('--workspace=ROOT', '(resolution ladder)', 'Build inside a cmx-workspace slot: all outputs under ROOT\out. Highest rung of the identity ladder (flag > project path > validated CMX_WORKSPACE > marker-walk > none)') +
     Opt('--rebuild-canonical', 'off', 'Use MSBuild /t:rebuild instead of /t:build. Forbidden in workspace mode') +
-    Opt('--test', 'off', 'Compile to a per-process temp folder. Mutually exclusive with workspace mode') +
+    Opt('--test', 'off', 'Compile to a per-process temp folder (every output, DCUs included; PostBuild not run). Mutually exclusive with workspace mode') +
     Opt('--raw', 'off', 'Echo raw MSBuild output to stderr') +
     Opt('--full', 'off', 'List warning/hint items in issues too (default: error items only)') +
     Opt('--wsl', 'off', 'Output file paths in Linux form (/mnt/x/...)') +

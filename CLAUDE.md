@@ -65,7 +65,7 @@ PostBuild rules (v1.13):
 
 - Default target: **`/t:build`** (incremental). `/t:rebuild` requires `--rebuild-canonical` (its Clean step can delete shared canonical DCPs).
 - Workspace (cmx-workspace slot) mode — all outputs under `ROOT\out`, env-seeded `DCC_UnitSearchPath`, `--depends` provenance file, auto-translation of `W:\Packages290\...` project paths to the slot copy. Mutually exclusive with `--test` and `--rebuild-canonical`. Since v1.8 the search path prepends the slot's private baseline (`ROOT\baseline\DCP\290`, `ROOT\baseline\DCU\290`) ahead of the registry Library Path, and `baseline`/`run`/`bin` root dirs are excluded from the worktree enumeration.
-- `--test` scratch: `W:\temp\compilar\<PID>` (per-process, parallel-safe).
+- `--test` scratch: `W:\temp\compilar\<PID>` (per-process, parallel-safe). ALL outputs go there — exe/bpl/dcp and, since v1.15, DCU/obj/hpp (`DCC_DcuOutput`; before it passed `DCC_UnitOutputDirectory`, which the Delphi targets ignore, and the DCUs landed in `W:\DCU\290`).
 
 ## Workspace Resolution Ladder (v1.12)
 

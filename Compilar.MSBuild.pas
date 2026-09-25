@@ -1,4 +1,4 @@
-unit Compilar.MSBuild;
+﻿unit Compilar.MSBuild;
 
 interface
 
@@ -116,10 +116,15 @@ begin
     end;
     ForceDirectories(ScratchDir);
 
+    // DCC_DcuOutput is the property the Delphi targets read. Until v1.15 this
+    // passed DCC_UnitOutputDirectory, which they ignore, so --test wrote DCUs
+    // into the project's real DCU folder (W:\DCU\290 for Packages290; T-8DCR).
+    // Obj/Hpp as in workspace mode: nothing of a --test build leaves the scratch.
     ExtraProps := Format(
-      '/p:DCC_ExeOutput="%s" /p:DCC_UnitOutputDirectory="%s" ' +
-      '/p:DCC_BplOutput="%s" /p:DCC_DcpOutput="%s"',
-      [ScratchDir, ScratchDir, ScratchDir, ScratchDir]);
+      '/p:DCC_ExeOutput="%s" /p:DCC_DcuOutput="%s" ' +
+      '/p:DCC_BplOutput="%s" /p:DCC_DcpOutput="%s" ' +
+      '/p:DCC_ObjOutput="%s" /p:DCC_HppOutput="%s"',
+      [ScratchDir, ScratchDir, ScratchDir, ScratchDir, ScratchDir, ScratchDir]);
   end;
 
   // Workspace mode (cmx-workspace slot): ALL outputs under ROOT\out — the

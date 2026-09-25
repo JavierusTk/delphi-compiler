@@ -28,7 +28,7 @@ Options and the project path may appear **in any order**, and an argument that i
 |--------|---------|-------------|
 | `--config=Debug\|Release` | `Debug` | Build configuration |
 | `--platform=Win32\|Win64` | `Win32` | Target platform |
-| `--test` | off | Compile to a temp folder (don't overwrite existing output) |
+| `--test` | off | Compile to a per-process temp folder, DCUs included (don't overwrite existing output); the PostBuild event is not run |
 | `--max-errors=N` | `3` | Max errors to include in output (1-10) |
 | `--context-lines=N` | `5` | Lines of source context around each error (0-20) |
 | `--raw` | off | Echo raw MSBuild output to stderr |

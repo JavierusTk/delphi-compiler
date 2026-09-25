@@ -1,5 +1,10 @@
 ﻿# Changelog
 
+## v1.15 - 2026-09-25
+
+- **Fix: `--test` did not isolate DCUs** (resolves `T-8DCR`, present since v1.0). It passed `/p:DCC_UnitOutputDirectory`, a property the Delphi targets never read (`CodeGear.Delphi.Targets` uses `DCC_DcuOutput`), so the DCUs went to the project's real DCU folder — for `Packages290` projects the shared optset's `W:\DCU\290`, the canonical tree other packages and the slot baselines consume. Now `--test` passes `DCC_DcuOutput`, plus `DCC_ObjOutput`/`DCC_HppOutput` as workspace mode does: nothing of a `--test` build leaves `W:\temp\compilar\<PID>`.
+- Measured: `BaseMAX.dproj --test` with v1.14 left no `.dcu` in the scratch and rewrote BaseMAX's `.dcu` in `W:\DCU\290`; with v1.15 the scratch holds its 43 `.dcu` and none of the 5,109 files under `W:\DCU\290`, `W:\DCP\290` and `W:\BPL\290` changes. `CyberMAXConsole.dproj --test`: `ok`, 5 `.dcu` in the scratch, no canonical file (nor `W:\CyberMAX`) changed. Same status and counters as v1.14 for both.
+
 ## v1.14 - 2026-09-25
 
 MSBuild's own verdict counts (resolves `T-4Y7N`), and `--test` no longer runs the PostBuild event (resolves `T-J74Q`). Measured against v1.13 on scratch projects:
@@ -16,7 +21,7 @@ MSBuild's own verdict counts (resolves `T-4Y7N`), and `--test` no longer runs th
 - **`output_locked` is preserved**: a stale output whose only errors are MSBuild file-lock errors (`MSB3061` delete denied, `MSB3021`/`MSB3027` copy denied) is still `output_locked`, with the lock error now visible in `issues`. The rule for callers is unchanged: never decide on `errors`; `output_locked` can now carry `errors ≥ 1`.
 - **`--test` skips the PostBuild event**, like workspace mode: the outputs go to a scratch folder and the event targets the real output.
 - Regression: `CyberMAXConsole.dproj` and `BaseMAX.dproj` with `--test` give identical status/counters in v1.13 and v1.14.
-- Found while verifying, not fixed here: `--test` does not isolate DCUs (`T-8DCR`).
+- Found while verifying, not fixed here: `--test` does not isolate DCUs (`T-8DCR`, fixed in v1.15).
 
 ## v1.13 - 2026-09-25
 

@@ -8,7 +8,7 @@ uses
 const
   /// Tool version — single source of truth. `--version`, the "version" field
   /// of every JSON output and the dproj VerInfo keys must stay in sync.
-  COMPILER_VERSION = '1.14';
+  COMPILER_VERSION = '1.15';
 
 type
   /// Build configuration
