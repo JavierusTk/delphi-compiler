@@ -4,5 +4,6 @@
 
 <!-- agent-todo:index:start -->
 - [delphi-compiler:T-4Y7N] `sin status` — delphi-compiler devuelve status ok / errors 0 / exit 0 cuando MSBuild falla en BRCC32 (falso verde sin .bpl)
+- [delphi-compiler:T-8DCR] `sin status` — --test no aísla los DCU: pasa /p:DCC_UnitOutputDirectory (ignorado) en vez de DCC_DcuOutput y escribe en el DCU canónico
 - [delphi-compiler:T-J74Q] `sin status` — Con --test el PostBuild del .dproj sigue ejecutándose aunque la salida vaya a la carpeta temporal
 <!-- agent-todo:index:end -->
