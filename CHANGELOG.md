@@ -1,5 +1,23 @@
 ﻿# Changelog
 
+## v1.14 - 2026-09-25
+
+MSBuild's own verdict counts (resolves `T-4Y7N`), and `--test` no longer runs the PostBuild event (resolves `T-J74Q`). Measured against v1.13 on scratch projects:
+
+| Case | v1.13 | v1.14 |
+|------|-------|-------|
+| `.rc` + unusable `%TEMP%` (BRCC32 task fails, `MSB4018`, no binary) | `status: "ok"`, exit 0, PostBuild **ran** — false green | `status: "error"`, exit 1, issue `MSB4018` whose `context` carries the cause (`System.IO.IOException: El nombre del directorio no es válido.` + stack) |
+| MSBuild fails with no recognizable error line (custom `<Error>` without code) | `status: "ok"`, exit 0, PostBuild ran | `status: "error"`, exit 1, synthetic issue `MSBUILD_EXIT` |
+| `--rebuild-canonical` on a locked exe | `output_locked`, `errors: 0` | `output_locked`, `errors: 1` (the `MSB3061` "unable to delete" that explains the lock) |
+| `--test` with a PostBuild event | PostBuild **ran** | `skipped`, reason `test mode: …` |
+
+- **MSBuild task errors are parsed** (`<origin>(line,col): error MSBnnnn: …` and `MSBUILD : error MSBnnnn: …`) as `error` issues with code `MSBnnnn`. A multi-line MSBuild error repeats origin and code on every line; the first continuation lines (up to 4) become the issue's `context` instead of lines of the `.targets` file.
+- **A failed MSBuild run is never a pass**: if MSBuild's exit code is non-zero and no error line explains it (timeout, unrecognized format), the status becomes `error` with a synthetic `MSBUILD_EXIT` issue pointing to `--raw`.
+- **`output_locked` is preserved**: a stale output whose only errors are MSBuild file-lock errors (`MSB3061` delete denied, `MSB3021`/`MSB3027` copy denied) is still `output_locked`, with the lock error now visible in `issues`. The rule for callers is unchanged: never decide on `errors`; `output_locked` can now carry `errors ≥ 1`.
+- **`--test` skips the PostBuild event**, like workspace mode: the outputs go to a scratch folder and the event targets the real output.
+- Regression: `CyberMAXConsole.dproj` and `BaseMAX.dproj` with `--test` give identical status/counters in v1.13 and v1.14.
+- Found while verifying, not fixed here: `--test` does not isolate DCUs (`T-8DCR`).
+
 ## v1.13 - 2026-09-25
 
 PostBuild event honesty. Three defects, all measured against v1.12 on a scratch project whose PostBuild writes a witness file (and can be forced to `exit /b 7`):

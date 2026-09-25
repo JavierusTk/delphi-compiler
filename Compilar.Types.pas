@@ -8,7 +8,7 @@ uses
 const
   /// Tool version — single source of truth. `--version`, the "version" field
   /// of every JSON output and the dproj VerInfo keys must stay in sync.
-  COMPILER_VERSION = '1.13';
+  COMPILER_VERSION = '1.14';
 
 type
   /// Build configuration
@@ -133,6 +133,15 @@ type
 function IssueTypeToStr(T: TIssueType): string;
 function StrToIssueType(const S: string): TIssueType;
 
+/// True for an MSBuild-level diagnostic (code MSBnnnn): a build task failed,
+/// not dcc (v1.14).
+function IsMSBuildCode(const ACode: string): Boolean;
+
+/// MSBuild errors meaning "the output file is held by another process"
+/// (delete/copy denied). They EXPLAIN output_locked instead of competing
+/// with it: /t:rebuild on a locked exe prints MSB3061 and compiles nothing.
+function IsFileLockMSBuildCode(const ACode: string): Boolean;
+
 /// Per-process scratch dir for --test mode (PID-suffixed: two concurrent
 /// --test runs must not clean each other's output). Shared by MSBuild and
 /// ProjectInfo so the path is defined exactly once.
@@ -146,6 +155,19 @@ uses
 function TestScratchDir: string;
 begin
   Result := 'W:\temp\compilar\' + IntToStr(GetCurrentProcessId);
+end;
+
+function IsMSBuildCode(const ACode: string): Boolean;
+begin
+  Result := ACode.StartsWith('MSB', True);
+end;
+
+function IsFileLockMSBuildCode(const ACode: string): Boolean;
+begin
+  // MSB3061: unable to delete file; MSB3021: unable to copy file;
+  // MSB3027: could not copy, retry count exceeded (file locked)
+  Result := SameText(ACode, 'MSB3061') or SameText(ACode, 'MSB3021')
+    or SameText(ACode, 'MSB3027');
 end;
 
 procedure TCmxWsFailure.Clear;

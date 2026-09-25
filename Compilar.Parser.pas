@@ -1,8 +1,9 @@
-unit Compilar.Parser;
+﻿unit Compilar.Parser;
 
 interface
 
 uses
+  System.Generics.Collections,
   Compilar.Types;
 
 type
@@ -18,13 +19,15 @@ type
   private
     class function ParseLine(const Line: string; out Issue: TCompileIssue): Boolean;
     class function ExtractIssueType(const TypeStr: string): TIssueType;
+    class procedure AddContinuation(Issues: TList<TCompileIssue>; Index: Integer;
+      const Msg: string);
   end;
 
 implementation
 
 uses
   System.SysUtils, System.RegularExpressions, System.Classes,
-  System.Generics.Collections, System.Generics.Defaults,
+  System.Generics.Defaults,
   Compilar.PathUtils;
 
 const
@@ -40,6 +43,15 @@ const
   // Order matters: "Hint warning" must come before "Hint" to match correctly
   COMPILER_MSG_PATTERN = '^(.+\.\w+)\((\d+)(?:,(\d+))?\):\s*(Fatal|Error|Warning|Hint\s*warning|Hint)\s+([A-Z]\d+):\s*(.+?)(?:\s*\[.+\])?$';
 
+  // MSBuild-level errors (v1.14): a build TASK failed, not dcc, so the build
+  // can stop with no dcc message at all (T-4Y7N: BRCC32 with an unusable %TEMP%):
+  // c:\...\CodeGear.Common.Targets(1276,5): error MSB4018: The "BRCC32" task failed unexpectedly. [...]
+  // MSBUILD : error MSB1009: Project file does not exist.
+  // A multi-line error repeats origin and code on every line (exception text,
+  // stack trace); those continuation lines become the issue's context.
+  MSBUILD_ERROR_PATTERN = '^(?:(.+?)\((\d+)(?:,(\d+))?\)|MSBUILD)\s*:\s*error\s+(MSB\d+)\s*:\s*(.*?)(?:\s*\[[^\]]+\])?$';
+  MSBUILD_CONTINUATION_MAX = 4;
+
 class function TOutputParser.Parse(const Output: string; MaxErrors: Integer;
   out Truncated: Boolean; out TotalIssuesFound: Integer): TArray<TCompileIssue>;
 var
@@ -51,6 +63,8 @@ var
   Issues: TList<TCompileIssue>;
   SeenIssues: TDictionary<string, Boolean>;
   Collecting: Boolean;
+  OpenKey: string;      // multi-line MSBuild error whose continuation lines are being kept
+  OpenIndex: Integer;
 begin
   Issues := TList<TCompileIssue>.Create;
   Lines := TStringList.Create;
@@ -61,6 +75,8 @@ begin
     Truncated := False;
     TotalIssuesFound := 0;
     Collecting := True;
+    OpenKey := '';
+    OpenIndex := -1;
 
     for I := 0 to Lines.Count - 1 do
     begin
@@ -70,8 +86,18 @@ begin
         // Deduplicate: v:normal emits each issue twice (DCC output + MSBuild reformatted)
         IssueKey := Issue.FilePath + ':' + IntToStr(Issue.Line) + ':' + Issue.Code;
         if SeenIssues.ContainsKey(IssueKey) then
+        begin
+          // Consecutive repeats of the error just added are its continuation
+          // lines; the repeat in the closing summary is not (OpenKey was
+          // closed by the lines in between).
+          if IssueKey = OpenKey then
+            AddContinuation(Issues, OpenIndex, Issue.Message)
+          else
+            OpenKey := '';
           Continue;
+        end;
         SeenIssues.Add(IssueKey, True);
+        OpenKey := '';
 
         Inc(TotalIssuesFound);
 
@@ -90,8 +116,15 @@ begin
           end;
 
           Issues.Add(Issue);
+          if IsMSBuildCode(Issue.Code) then
+          begin
+            OpenKey := IssueKey;
+            OpenIndex := Issues.Count - 1;
+          end;
         end;
-      end;
+      end
+      else
+        OpenKey := '';
     end;
 
     Result := Issues.ToArray;
@@ -139,8 +172,42 @@ begin
     // Initialize arrays
     SetLength(Issue.Context, 0);
 
+    Exit(True);
+  end;
+
+  Match := TRegEx.Match(Line, MSBUILD_ERROR_PATTERN, [roIgnoreCase]);
+  if Match.Success then
+  begin
+    // Groups 1-3: origin file(line[,column]); absent in "MSBUILD : error ..."
+    if Match.Groups[1].Success and (Match.Groups[1].Value <> '') then
+    begin
+      Issue.FilePath := TPathUtils.NormalizeForOutput(Match.Groups[1].Value);
+      Issue.Line := StrToIntDef(Match.Groups[2].Value, 0);
+      if Match.Groups[3].Success then
+        Issue.Column := StrToIntDef(Match.Groups[3].Value, 0)
+      else
+        Issue.Column := 1;
+    end;
+    Issue.IssueType := itError;
+    Issue.Code := UpperCase(Match.Groups[4].Value);
+    Issue.Message := Trim(Match.Groups[5].Value);
+    SetLength(Issue.Context, 0);
     Result := True;
   end;
+end;
+
+class procedure TOutputParser.AddContinuation(Issues: TList<TCompileIssue>;
+  Index: Integer; const Msg: string);
+var
+  Item: TCompileIssue;
+begin
+  if (Msg = '') or (Index < 0) or (Index >= Issues.Count) then
+    Exit;
+  Item := Issues[Index];
+  if Length(Item.Context) >= MSBUILD_CONTINUATION_MAX then
+    Exit;
+  Item.Context := Item.Context + [Msg];
+  Issues[Index] := Item;
 end;
 
 class function TOutputParser.ExtractIssueType(const TypeStr: string): TIssueType;

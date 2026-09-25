@@ -382,7 +382,8 @@ begin
     Pad(2) + '"--version and --help are informational in any position: they print and exit 0 without compiling.",' + NL +
     Pad(2) + '"Project path accepts Windows (W:\\...) or WSL (/mnt/w/...) form.",' + NL +
     Pad(2) + '"A pass is status in {ok, hints, warnings} — never infer success from errors:0 alone.",' + NL +
-    Pad(2) + '"The .dproj PostBuild event runs only after a pass and never in workspace mode (reported as skipped); if it fails, status is postbuild_error."' + NL +
+    Pad(2) + '"MSBuild task errors (code MSBnnnn) count as errors, and a failed MSBuild run is never a pass even when no error line is recognized (code MSBUILD_EXIT).",' + NL +
+    Pad(2) + '"The .dproj PostBuild event runs only after a pass and never in workspace or --test mode (reported as skipped); if it fails, status is postbuild_error."' + NL +
     Pad(1) + '],' + NL +
     Pad(1) + '"exit_codes": {' + NL +
     Pad(2) + '"0": "pass (status ok|hints|warnings) or informational query",' + NL +

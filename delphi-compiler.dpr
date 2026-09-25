@@ -48,6 +48,21 @@ uses
     Result := (AStatus = 'ok') or (AStatus = 'hints') or (AStatus = 'warnings');
   end;
 
+  // True when every error is an MSBuild file-lock error (vacuously True with
+  // none): those EXPLAIN a stale output as output_locked instead of turning it
+  // into a plain "error" (v1.14).
+  function OnlyFileLockErrors(const AResult: TCompileResult): Boolean;
+  var
+    Issue: TCompileIssue;
+  begin
+    if AResult.Truncated then
+      Exit(False);
+    for Issue in AResult.Issues do
+      if (Issue.IssueType in [itError, itFatal]) and not IsFileLockMSBuildCode(Issue.Code) then
+        Exit(False);
+    Result := True;
+  end;
+
 var
   Args: TCompilerArgs;
   ParseError: string;
@@ -65,6 +80,7 @@ var
   LPostBuildCmd: string;
   LProjectDir: string;
   LEventResult: TBuildEventInfo;
+  LExitIssue: TCompileIssue;
 begin
 
   try
@@ -164,15 +180,31 @@ begin
         if OutputFileTime < CompileStartTime then
         begin
           Result.OutputStale := True;
-          Result.OutputMessage := 'NOT A SUCCESSFUL BUILD. The output binary was NOT rewritten by this run (most likely locked by another process: with /t:rebuild the Clean step aborts before compiling; with the default /t:build the linker cannot rewrite the locked file). "errors":0 here is meaningless. Close the process holding the output (or free the file) and recompile to get a real result.';
+          Result.OutputMessage := 'NOT A SUCCESSFUL BUILD. The output binary was NOT rewritten by this run (most likely locked by another process: with /t:rebuild the Clean step aborts before compiling; with the default /t:build the linker cannot rewrite the locked file). "errors" here says nothing about the sources. Close the process holding the output (or free the file) and recompile to get a real result.';
           // NOT a success: a locked output means the binary on disk does not
           // correspond to this compilation. Flag it distinctly, but callers must
-          // NOT read output_locked as a clean compile: errors=0 here means
-          // "output not produced", not "compiled with no errors".
-          if Result.ErrorCount = 0 then
+          // NOT read output_locked as a clean compile: the sources were not
+          // compiled. MSBuild's own "unable to delete/copy" errors (MSB3061...)
+          // are the lock, not a competing diagnosis.
+          if OnlyFileLockErrors(Result) then
             Result.Status := 'output_locked';
         end;
       end;
+    end;
+
+    // 7b2. MSBuild's own verdict (v1.14, T-4Y7N). A failing build task that is
+    //      not dcc (BRCC32 -> MSB4018, ...) is already an MSB issue; if MSBuild
+    //      still failed and no error line explains it (timeout, unrecognized
+    //      format), the result must not be a pass: status ok with exit_code 1
+    //      and no binary was a false green.
+    if IsPassStatus(Result.Status) and (MSBuildExitCode <> 0) then
+    begin
+      LExitIssue.IssueType := itError;
+      LExitIssue.Code := 'MSBUILD_EXIT';
+      LExitIssue.Message := Format('MSBuild failed (exit code %d) but no error line was recognized in its output; rerun with --raw to see it', [MSBuildExitCode]);
+      Result.Issues := Result.Issues + [LExitIssue];
+      Inc(Result.ErrorCount);
+      Result.Status := 'error';
     end;
 
     // 7c. Store PreBuild event info
@@ -200,6 +232,13 @@ begin
         Result.PostBuildEvent.Skipped := True;
         Result.PostBuildEvent.SkipReason := 'workspace mode: outputs are redirected under the slot and the event targets the canonical tree';
       end
+      else if Args.TestMode then
+      begin
+        // --test compiles to a scratch folder precisely so the real output is
+        // untouched; a deploy step would copy the scratch binary or fail (v1.14).
+        Result.PostBuildEvent.Skipped := True;
+        Result.PostBuildEvent.SkipReason := 'test mode: outputs are redirected to a scratch folder and the event targets the real output';
+      end
       else
       begin
         LEventResult := TBuildEvents.Execute(LPostBuildCmd, LProjectDir);
@@ -216,7 +255,7 @@ begin
     //     the error count; that hides output_locked (errors:0 but NOTHING compiled).
     //     stderr is not consumed by a stdout-only pipe, so this survives the pattern.
     if Result.Status = 'output_locked' then
-      WriteStderr('[delphi-compiler] NOT A BUILD (status=output_locked): output binary locked by another process; MSBuild /t:rebuild Clean aborted before compiling, so NOTHING was compiled. "errors":0 is meaningless here. Free the lock (close the running app) and recompile.')
+      WriteStderr('[delphi-compiler] NOT A BUILD (status=output_locked): output binary locked by another process; MSBuild /t:rebuild Clean aborted before compiling, so NOTHING was compiled. "errors" says nothing about the sources here. Free the lock (close the running app) and recompile.')
     else if Result.Status = 'postbuild_error' then
       WriteStderr('[delphi-compiler] NOT A PASS (status=postbuild_error): the sources compiled but the .dproj PostBuild event failed (exit ' + IntToStr(Result.PostBuildEvent.ExitCode) + '). "errors":0 does not mean the build completed; see post_build_event in the JSON.');
 

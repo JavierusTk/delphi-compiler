@@ -1,4 +1,4 @@
-unit Compilar.Context;
+﻿unit Compilar.Context;
 
 interface
 
@@ -37,7 +37,9 @@ var
 begin
   for I := 0 to High(Issues) do
   begin
-    if Issues[I].FilePath <> '' then
+    // An MSBuild error's origin is a .targets file, not source: its context
+    // is the continuation lines the parser already collected (v1.14).
+    if (Issues[I].FilePath <> '') and not IsMSBuildCode(Issues[I].Code) then
     begin
       // Convert to Windows path for file reading
       WinPath := TPathUtils.NormalizeToWindows(Issues[I].FilePath);
