@@ -20,4 +20,15 @@ Tombstones for resolved TO-DO items (machine-readable; read by `agent-todo lint`
   title: delphi-compiler devuelve status ok / errors 0 / exit 0 cuando MSBuild falla
     en BRCC32 (falso verde sin .bpl)
   uid: delphi-compiler:T-4Y7N
+- commit: c699eaa
+  note: 'Resuelto en v1.14: con --test el PostBuild se omite y se informa como post_build_event
+    {skipped: true, reason: ''test mode: outputs are redirected to a scratch folder
+    and the event targets the real output''}. Verificado 2026-09-25 con el proyecto
+    de prueba cuyo PostBuild deja un testigo: v1.13 --test => ejecuta el PostBuild
+    (testigo creado); v1.14 --test => status ok, exit 0, skipped con reason, sin testigo;
+    sin --test => testigo creado.'
+  resolved_at: '2026-09-25'
+  title: Con --test el PostBuild del .dproj sigue ejecutándose aunque la salida vaya
+    a la carpeta temporal
+  uid: delphi-compiler:T-J74Q
 <!-- agent-todo:resolved:end -->
