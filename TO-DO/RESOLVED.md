@@ -31,4 +31,18 @@ Tombstones for resolved TO-DO items (machine-readable; read by `agent-todo lint`
   title: Con --test el PostBuild del .dproj sigue ejecutándose aunque la salida vaya
     a la carpeta temporal
   uid: delphi-compiler:T-J74Q
+- commit: c4f3fb4
+  note: 'Resuelto en v1.15: --test pasa /p:DCC_DcuOutput (la propiedad que leen los
+    targets de Delphi) en vez de DCC_UnitOutputDirectory, y además DCC_ObjOutput/DCC_HppOutput
+    como el modo workspace. Verificado 2026-09-25 con foto de fechas y tamaños de
+    W:\DCU\290, W:\DCP\290 y W:\BPL\290 (5.109 ficheros) antes y después: BaseMAX.dproj
+    --test (v1.15, binario final) => sus 43 .dcu en W:\temp\compilar\<PID> y 0 ficheros
+    canónicos cambiados (con v1.14 no dejaba ningún .dcu en el scratch y reescribía
+    los de BaseMAX en W:\DCU\290). CyberMAXConsole.dproj --test => ok, 5 .dcu en el
+    scratch, 0 cambios en el árbol canónico ni en W:\CyberMAX. Mismos status y contadores
+    que v1.14.'
+  resolved_at: '2026-09-25'
+  title: '--test no aísla los DCU: pasa /p:DCC_UnitOutputDirectory (ignorado) en vez
+    de DCC_DcuOutput y escribe en el DCU canónico'
+  uid: delphi-compiler:T-8DCR
 <!-- agent-todo:resolved:end -->
