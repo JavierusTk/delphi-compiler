@@ -6,7 +6,7 @@ A command-line wrapper around MSBuild for Delphi projects that produces structur
 
 1. Runs PreBuild events from the `.dproj` (if defined)
 2. Invokes MSBuild via RAD Studio's `rsvars.bat` to compile a `.dproj` project
-3. Runs PostBuild events (if defined, only on successful compilation)
+3. Runs PostBuild events (if defined, only after a pass — `ok`/`hints`/`warnings` — and never in workspace mode; a defined event that does not run is reported as `skipped` with its reason)
 4. Parses the compiler output (errors, warnings, hints)
 5. Enriches each issue with source code context around the error line
 6. Optionally looks up undeclared identifiers and missing files
@@ -106,7 +106,9 @@ delphi-compiler.exe W:\MyProject\MyProject.dproj --config=Release --max-errors=5
 | `hints` | Compiled successfully, only hints |
 | `warnings` | Compiled successfully, warnings present |
 | `error` | Compilation failed |
+| `output_locked` | Output binary locked by another process: NOT compiled, even though `errors` is 0 |
 | `prebuild_error` | PreBuild event failed (compilation not attempted) |
+| `postbuild_error` | Sources compiled, but the `.dproj` PostBuild event failed (exit 1: the declared build did not complete) |
 | `invalid` | Bad command-line arguments |
 | `internal_error` | Unexpected failure (MSBuild not found, etc.) |
 

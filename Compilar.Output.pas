@@ -252,6 +252,15 @@ begin
       end;
       SB.Append(NL);
       SB.Append(P1).Append('},').Append(NL);
+    end
+    else if AResult.PostBuildEvent.Skipped then
+    begin
+      // Defined in the .dproj but not run (v1.13): say so and why.
+      SB.Append(P1).Append('"post_build_event": {').Append(NL);
+      SB.Append(P2).Append('"command": "').Append(EscapeJSON(AResult.PostBuildEvent.Command)).Append('",').Append(NL);
+      SB.Append(P2).Append('"skipped": true,').Append(NL);
+      SB.Append(P2).Append('"reason": "').Append(EscapeJSON(AResult.PostBuildEvent.SkipReason)).Append('"').Append(NL);
+      SB.Append(P1).Append('},').Append(NL);
     end;
 
     SB.Append(P1).Append('"time_ms": ').Append(IntToStr(AResult.TimeMs)).Append(',').Append(NL);
@@ -372,11 +381,12 @@ begin
     Pad(2) + '"Options and the project path may appear in any order; an unrecognized argument is an error (status invalid, exit 2), never ignored.",' + NL +
     Pad(2) + '"--version and --help are informational in any position: they print and exit 0 without compiling.",' + NL +
     Pad(2) + '"Project path accepts Windows (W:\\...) or WSL (/mnt/w/...) form.",' + NL +
-    Pad(2) + '"A pass is status in {ok, hints, warnings} — never infer success from errors:0 alone."' + NL +
+    Pad(2) + '"A pass is status in {ok, hints, warnings} — never infer success from errors:0 alone.",' + NL +
+    Pad(2) + '"The .dproj PostBuild event runs only after a pass and never in workspace mode (reported as skipped); if it fails, status is postbuild_error."' + NL +
     Pad(1) + '],' + NL +
     Pad(1) + '"exit_codes": {' + NL +
     Pad(2) + '"0": "pass (status ok|hints|warnings) or informational query",' + NL +
-    Pad(2) + '"1": "build failure (error, output_locked, prebuild_error)",' + NL +
+    Pad(2) + '"1": "build failure (error, output_locked, prebuild_error, postbuild_error)",' + NL +
     Pad(2) + '"2": "invalid (bad arguments, project not found, workspace guard)",' + NL +
     Pad(2) + '"3": "internal_error (MSBuild could not run, unexpected exception)"' + NL +
     Pad(1) + '},' + NL +

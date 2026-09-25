@@ -1,5 +1,23 @@
 ﻿# Changelog
 
+## v1.13 - 2026-09-25
+
+PostBuild event honesty. Three defects, all measured against v1.12 on a scratch project whose PostBuild writes a witness file (and can be forced to `exit /b 7`):
+
+| Case | v1.12 | v1.13 |
+|------|-------|-------|
+| PostBuild fails after a clean compile | `status: "ok"`, exit 0 — false green | `status: "postbuild_error"`, exit 1, stderr `NOT A PASS` line |
+| Workspace (slot) build | PostBuild **ran** (witness written) | not run; `post_build_event: {skipped: true, reason}` |
+| `output_locked` (`--rebuild-canonical` with the exe held open) | PostBuild **ran** (witness written): deploys a binary this run never wrote | not run; `skipped`, reason names the status |
+| Compile error | nothing reported about the event | `skipped`, reason `compilation did not pass (status=error)` |
+
+- **PostBuild runs only after a real pass** (`status ∈ {ok, hints, warnings}`); the guard was `ErrorCount = 0`, which let it run on `output_locked`.
+- **Never in workspace mode**: outputs go under `ROOT\out`, but the event was written for the canonical tree (absolute `W:\` paths, `$(...)` macros this tool does not expand) — running it either fails or copies a slot binary into the canonical tree. Same rule `cmx-workspace build` already applies.
+- **`postbuild_error` is a real status now, and it exits 1.** The v1.9 note ("a `postbuild_error` after a clean compile does NOT change the exit code") described a status the code never emitted: a failed PostBuild left `status: "ok"`. Exit 1 keeps the v1.9 invariant intact — exit 0 ⇔ `status ∈ {ok, hints, warnings}` — so callers keying on either one agree.
+- **A defined event that does not run is reported**, never silently dropped: `"post_build_event": {"command", "skipped": true, "reason"}` (new `TBuildEventInfo.Skipped`/`SkipReason`).
+- `--help`: exit code 1 lists `postbuild_error`; a note states the PostBuild rules.
+- Impact audit (2026-09-25): of the 1,286 `.dproj` in the file index, only two define a PostBuild event — the `ReleasePMv2`/`DebugPMv2` configs of `CyberMAX.dproj` and `Gestion2000.dproj` — and this tool only selects `Debug`/`Release`, so no current CyberMAX build changes result.
+
 ## v1.12 - 2026-08-12
 
 - **Workspace resolution ladder** (cmx-workspace slot identity). Until v1.11 the only sources of slot identity were the `--workspace=` flag and a raw, unvalidated `CMX_WORKSPACE`; the marker file `.cmx-workspace.json` was never opened. The tool now implements the full precedence ladder of [`W:\cmx-slots\lib\MARKER-CONTRACT.md`](../../cmx-slots/lib/MARKER-CONTRACT.md) §5.3 by consuming the reference unit `CmxWorkspace.Detect.pas` (compiled INTO the exe — build-time search path only, no runtime dependency on `cmx-slots`):

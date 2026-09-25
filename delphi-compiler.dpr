@@ -42,6 +42,12 @@ uses
     WriteFile(Handle, Bytes[0], Length(Bytes), Written, nil);
   end;
 
+  // A real pass is EXACTLY status in {ok, hints, warnings} (v1.9 contract).
+  function IsPassStatus(const AStatus: string): Boolean;
+  begin
+    Result := (AStatus = 'ok') or (AStatus = 'hints') or (AStatus = 'warnings');
+  end;
+
 var
   Args: TCompilerArgs;
   ParseError: string;
@@ -173,11 +179,36 @@ begin
     if not LPreBuildCmd.IsEmpty then
       Result.PreBuildEvent := LEventResult;
 
-    // 7d. Run PostBuild event (only if compilation succeeded)
-    if (not LPostBuildCmd.IsEmpty) and (Result.ErrorCount = 0) then
+    // 7d. PostBuild event (v1.13). Runs only after a REAL pass: keying on
+    //     ErrorCount = 0 let it run on output_locked and deploy a binary this
+    //     run never wrote. A defined event that does not run is reported as
+    //     skipped with its reason, never silently dropped.
+    if not LPostBuildCmd.IsEmpty then
     begin
-      LEventResult := TBuildEvents.Execute(LPostBuildCmd, LProjectDir);
-      Result.PostBuildEvent := LEventResult;
+      Result.PostBuildEvent.Command := LPostBuildCmd;
+      if not IsPassStatus(Result.Status) then
+      begin
+        Result.PostBuildEvent.Skipped := True;
+        Result.PostBuildEvent.SkipReason := 'compilation did not pass (status=' + Result.Status + ')';
+      end
+      else if Args.WorkspaceRoot <> '' then
+      begin
+        // Slot build: outputs are redirected under ROOT\out, but the event was
+        // written for the canonical tree (absolute W:\ paths, $(...) macros this
+        // tool does not expand). Running it would fail or copy a slot binary
+        // into the canonical tree; cmx-workspace build suppresses it as well.
+        Result.PostBuildEvent.Skipped := True;
+        Result.PostBuildEvent.SkipReason := 'workspace mode: outputs are redirected under the slot and the event targets the canonical tree';
+      end
+      else
+      begin
+        LEventResult := TBuildEvents.Execute(LPostBuildCmd, LProjectDir);
+        Result.PostBuildEvent := LEventResult;
+        // The binary compiled, but the build the .dproj declares did not
+        // complete (typically a deploy copy): not a pass.
+        if not LEventResult.Success then
+          Result.Status := 'postbuild_error';
+      end;
     end;
 
     // 7e. Loud stderr line for the deceptive zero-error non-build (output_locked).
@@ -185,18 +216,19 @@ begin
     //     the error count; that hides output_locked (errors:0 but NOTHING compiled).
     //     stderr is not consumed by a stdout-only pipe, so this survives the pattern.
     if Result.Status = 'output_locked' then
-      WriteStderr('[delphi-compiler] NOT A BUILD (status=output_locked): output binary locked by another process; MSBuild /t:rebuild Clean aborted before compiling, so NOTHING was compiled. "errors":0 is meaningless here. Free the lock (close the running app) and recompile.');
+      WriteStderr('[delphi-compiler] NOT A BUILD (status=output_locked): output binary locked by another process; MSBuild /t:rebuild Clean aborted before compiling, so NOTHING was compiled. "errors":0 is meaningless here. Free the lock (close the running app) and recompile.')
+    else if Result.Status = 'postbuild_error' then
+      WriteStderr('[delphi-compiler] NOT A PASS (status=postbuild_error): the sources compiled but the .dproj PostBuild event failed (exit ' + IntToStr(Result.PostBuildEvent.ExitCode) + '). "errors":0 does not mean the build completed; see post_build_event in the JSON.');
 
     // 8. Output JSON (error items only unless --full; counters always complete)
     WriteStdout(TJSONOutput.Generate(Result, Args.FullOutput));
 
     // 9. Deterministic process exit code (v1.9). A real pass is EXACTLY
     //    status in {ok, hints, warnings}; every other status (error,
-    //    output_locked, ...) reports errors:0 or not, but did NOT produce a
-    //    trustworthy binary. Callers key on the exit code (or on status),
-    //    never on the error count alone.
-    if (Result.Status = 'ok') or (Result.Status = 'hints')
-       or (Result.Status = 'warnings') then
+    //    output_locked, postbuild_error, ...) reports errors:0 or not, but did
+    //    NOT complete a trustworthy build. Callers key on the exit code (or on
+    //    status), never on the error count alone.
+    if IsPassStatus(Result.Status) then
       ExitCode := 0
     else
       ExitCode := 1;

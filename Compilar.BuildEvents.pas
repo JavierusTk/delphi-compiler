@@ -1,4 +1,4 @@
-unit Compilar.BuildEvents;
+﻿unit Compilar.BuildEvents;
 
 interface
 
@@ -225,6 +225,8 @@ begin
   Result.ExitCode := -1;
   Result.Executed := True;
   Result.Success := False;
+  Result.Skipped := False;
+  Result.SkipReason := EmptyStr;
 
   // Write a temp bat file in the project directory.
   // Use PID for uniqueness to avoid collisions under concurrent compilation.

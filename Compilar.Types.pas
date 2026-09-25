@@ -8,7 +8,7 @@ uses
 const
   /// Tool version — single source of truth. `--version`, the "version" field
   /// of every JSON output and the dproj VerInfo keys must stay in sync.
-  COMPILER_VERSION = '1.12';
+  COMPILER_VERSION = '1.13';
 
 type
   /// Build configuration
@@ -94,11 +94,13 @@ type
     ExitCode: Integer;
     Executed: Boolean;
     Success: Boolean;
+    Skipped: Boolean;       // defined in the .dproj but deliberately NOT run
+    SkipReason: string;     // why (reported in the JSON, never a silent omission)
   end;
 
   /// Final compilation result
   TCompileResult = record
-    Status: string;            // ok, hints, warnings, error, invalid, internal_error
+    Status: string;            // ok, hints, warnings, error, output_locked, postbuild_error, invalid, internal_error
     Project: string;           // Project filename only
     ProjectPath: string;       // Full path to .dproj (Linux format)
     Config: string;
@@ -209,7 +211,9 @@ begin
   Result.OutputPath := '';
   Result.OutputStale := False;
   Result.PreBuildEvent.Executed := False;
+  Result.PreBuildEvent.Skipped := False;
   Result.PostBuildEvent.Executed := False;
+  Result.PostBuildEvent.Skipped := False;
   Result.WorkspaceSource := CmxWsSourceToStr(Args.WorkspaceSource);
   Result.WorkspaceRoot := Args.WorkspaceRoot;
   Result.ConflictEnvSlot := Args.ConflictEnvSlot;

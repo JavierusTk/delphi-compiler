@@ -35,7 +35,7 @@ Source code for `delphi-compiler.exe` — a Delphi compilation wrapper with stru
 5. Execute MSBuild (with /p:PreBuildEvent= /p:PostBuildEvent= to suppress native events)
 6. Parse compiler output → TCompileIssue[]
 7. Enrich with source context
-8. Execute PostBuild event (only if no errors)
+8. Execute PostBuild event — only after a pass (status ok/hints/warnings) and never in workspace mode; otherwise reported as `skipped` + `reason`. A failure sets `postbuild_error`
 9. Output JSON → stdout (error items only unless `--full`; counters always complete) + deterministic exit code
 ```
 
@@ -48,6 +48,13 @@ Build events are parsed from `.dproj` PropertyGroups with condition priority:
 3. **Cfg_X style** (`$(Cfg_2_Win32)`, `$(Cfg_2)`, `$(Base_Win32)`, `$(Base)`)
 
 Events are executed via a temp `.bat` file (PID-unique name) in the project directory. MSBuild's native event execution is suppressed to avoid double execution.
+
+PostBuild rules (v1.13):
+
+- **Runs only after a real pass.** Before v1.13 the guard was `ErrorCount = 0`, so it also ran on `output_locked` and deployed a binary that run never wrote.
+- **Never in workspace mode.** Outputs are redirected under `ROOT\out`, but the event was written for the canonical tree (absolute `W:\` paths; `$(...)` macros are NOT expanded by this tool). Running it would fail or copy a slot binary into the canonical tree. `cmx-workspace build` suppresses it too.
+- **A defined event that does not run is reported**, never dropped: `"post_build_event": {"command", "skipped": true, "reason"}`.
+- **A failure is not a pass**: status `postbuild_error`, exit 1, plus a `[delphi-compiler] NOT A PASS …` line on stderr. The binary compiled, but the build the `.dproj` declares (typically a deploy copy) did not complete.
 
 > **Note**: Custom MSBuild targets (`<Target Name="BeforeBuild">`) are NOT handled — only `<PreBuildEvent>` and `<PostBuildEvent>` property elements.
 
@@ -93,14 +100,15 @@ One pass over every argument in `TArgsParser.Parse`, no positional assumptions:
 | Exit | Meaning |
 |------|---------|
 | `0` | Real pass: `status ∈ {ok, hints, warnings}` |
-| `1` | Build failure: `error`, `output_locked`, `prebuild_error` |
+| `1` | Build failure: `error`, `output_locked`, `prebuild_error`, `postbuild_error` |
 | `2` | `invalid` (bad arguments / project not found / slot guard) |
 | `3` | `internal_error` (MSBuild could not run, unexpected exception) |
 
 Callers key pass/fail on the exit code (or on `status`), **never** on `errors`
 alone — `output_locked`, `invalid` and `internal_error` all report `errors: 0`
-without a successful compile. A `postbuild_error` after a clean compile keeps
-exit `0` (the binary is good; the event result is in the JSON).
+without a successful compile. Since v1.13 `postbuild_error` also exits `1` (the
+v1.9 note that it kept exit `0` described a status the code never emitted: a
+failed PostBuild left `status: "ok"`, a false green).
 
 ## JSON Output Status Values
 
@@ -112,6 +120,7 @@ exit `0` (the binary is good; the event result is in the JSON).
 | `error` | Compilation failed |
 | `output_locked` | **NOT a successful build.** Output binary locked by another process → `/t:rebuild` Clean failed, build aborted **before compiling**, sources **NOT compiled** (`errors:0` does not mean the code compiles). Also printed as a `[delphi-compiler] NOT A BUILD …` line on **stderr**. |
 | `prebuild_error` | PreBuild event failed (compilation not attempted) |
+| `postbuild_error` | Sources compiled but the PostBuild event failed — NOT a pass (exit 1) |
 | `invalid` | Bad command-line arguments |
 | `internal_error` | Unexpected failure |
 
