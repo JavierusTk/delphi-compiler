@@ -27,6 +27,7 @@ type
     class function ReadDeployFileOutput(const DprojPath, Config: string): string;
     class function GetProjectExtension(const DprojPath: string): string;
     class function GetLibSuffix(const DprojPath: string): string;
+    class function FindOutputFile(const OutputDir, ProjectName, Extension, DprojPath: string): string;
     class function ResolveVariables(const Value, Config, Platform, ProjectDir: string): string;
   end;
 
@@ -130,7 +131,6 @@ var
   DccLine: string;
   OutputDir, Extension: string;
   ProjectDir, ProjectName: string;
-  FullPath: string;
   ExtFromProject: string;
 begin
   Result := '';
@@ -166,17 +166,7 @@ begin
     OutputDir := TPath.Combine(ProjectDir, OutputDir);
   OutputDir := TPath.GetFullPath(OutputDir);
 
-  FullPath := TPath.Combine(OutputDir, ProjectName + Extension);
-
-  if FileExists(FullPath) then
-    Result := TPathUtils.NormalizeForOutput(FullPath)
-  else
-  begin
-    // Try with lib suffix (e.g., MyPackage290.bpl from {$LIBSUFFIX AUTO})
-    FullPath := TPath.Combine(OutputDir, ProjectName + GetLibSuffix(Args.ProjectPathWin) + Extension);
-    if FileExists(FullPath) then
-      Result := TPathUtils.NormalizeForOutput(FullPath);
-  end;
+  Result := FindOutputFile(OutputDir, ProjectName, Extension, Args.ProjectPathWin);
 end;
 
 class function TProjectInfo.GetOutputPath(const Args: TCompilerArgs): string;
@@ -195,9 +185,7 @@ begin
   begin
     ProjectName := ChangeFileExt(TPath.GetFileName(Args.ProjectPathWin), '');
     Extension := GetProjectExtension(Args.ProjectPathWin);
-    FullPath := TPath.Combine(TestScratchDir, ProjectName + Extension);
-    if FileExists(FullPath) then
-      Result := TPathUtils.NormalizeForOutput(FullPath);
+    Result := FindOutputFile(TestScratchDir, ProjectName, Extension, Args.ProjectPathWin);
     Exit;
   end;
 
@@ -207,11 +195,10 @@ begin
     ProjectName := ChangeFileExt(TPath.GetFileName(Args.ProjectPathWin), '');
     Extension := GetProjectExtension(Args.ProjectPathWin);
     if Extension = '.bpl' then
-      FullPath := Args.WorkspaceRoot + '\out\BPL\290\' + ProjectName + Extension
+      OutputDir := Args.WorkspaceRoot + '\out\BPL\290'
     else
-      FullPath := Args.WorkspaceRoot + '\out\EXE\' + ProjectName + Extension;
-    if FileExists(FullPath) then
-      Result := TPathUtils.NormalizeForOutput(FullPath);
+      OutputDir := Args.WorkspaceRoot + '\out\EXE';
+    Result := FindOutputFile(OutputDir, ProjectName, Extension, Args.ProjectPathWin);
     Exit;
   end;
 
@@ -259,16 +246,10 @@ begin
   end;
 
   // Only report if the file actually exists (compilation succeeded)
-  if FileExists(FullPath) then
-    Result := TPathUtils.NormalizeForOutput(FullPath)
-  else
-  begin
-    // Try with lib suffix (e.g., MyPackage290.bpl from {$LIBSUFFIX AUTO})
-    OutputDir := ExtractFilePath(FullPath);
-    FullPath := TPath.Combine(OutputDir, ProjectName + GetLibSuffix(Args.ProjectPathWin) + Extension);
-    if FileExists(FullPath) then
-      Result := TPathUtils.NormalizeForOutput(FullPath);
-  end;
+  Result := FindOutputFile(ExtractFilePath(FullPath), ProjectName, Extension, Args.ProjectPathWin);
+  // A DeployFile path may name the binary differently: keep it as last resort
+  if (Result = '') and FileExists(FullPath) then
+    Result := TPathUtils.NormalizeForOutput(FullPath);
 end;
 
 class function TProjectInfo.ReadDprojProperty(const DprojPath, PropertyName, Config, Platform: string): string;
@@ -498,6 +479,28 @@ begin
     if SameText(Result, 'AUTO') then
       Result := ResolveEnvProjVars('$(DELPHIVERSION)');
   end;
+end;
+
+class function TProjectInfo.FindOutputFile(const OutputDir, ProjectName, Extension, DprojPath: string): string;
+var
+  LibSuffix, Candidate: string;
+begin
+  // A package with {$LIBSUFFIX} is written as <Project><Suffix><Ext>, so that
+  // name goes first; the unsuffixed one is only the fallback (no suffix declared,
+  // or not resolvable here). Checking the unsuffixed name first picked a stale
+  // <Project><Ext> left in the same folder by another build, and the run was
+  // reported as output_locked although it had written the real binary (T-Q4Q4).
+  Result := '';
+  LibSuffix := GetLibSuffix(DprojPath);
+  if LibSuffix <> '' then
+  begin
+    Candidate := TPath.Combine(OutputDir, ProjectName + LibSuffix + Extension);
+    if FileExists(Candidate) then
+      Exit(TPathUtils.NormalizeForOutput(Candidate));
+  end;
+  Candidate := TPath.Combine(OutputDir, ProjectName + Extension);
+  if FileExists(Candidate) then
+    Result := TPathUtils.NormalizeForOutput(Candidate);
 end;
 
 class function TProjectInfo.ResolveVariables(const Value, Config, Platform, ProjectDir: string): string;

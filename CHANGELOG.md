@@ -1,5 +1,11 @@
 ﻿# Changelog
 
+## v1.16 - 2026-10-08
+
+- **Fix: false `output_locked` with `{$LIBSUFFIX}` packages** (resolves `T-Q4Q4`). The output lookup tried `<Project><Ext>` first and the suffixed `<Project><Suffix><Ext>` only when the unsuffixed file did not exist. With `{$LIBSUFFIX AUTO}` the compiler writes `MakerAI290.bpl`; a stale `MakerAI.bpl` left in the same folder by another build won the lookup, its date predates the run, and a clean compile was reported as `output_locked` (exit 1). Now a single helper (`TProjectInfo.FindOutputFile`) tries the suffixed name first and the unsuffixed one as fallback, in `GetOutputFromMSBuild` and in the three branches of `GetOutputPath` (canonical, `--test`, workspace — the last two did not try the suffix at all).
+- The suffix still comes from the `.dpk` directive: the `dcc` command line MSBuild runs carries no suffix flag (checked with `--raw`).
+- Measured on a scratch copy of `MakerAiDsg` (`{$LIBSUFFIX AUTO}`) with a stale `MakerAiDsg.bpl` next to the output: v1.15 → `output_locked`, exit 1, `output` = the stale file, while `MakerAiDsg290.bpl` had just been rewritten; v1.16 → pass, exit 0, `output` = `MakerAiDsg290.bpl`.
+
 ## v1.15 - 2026-09-25
 
 - **Fix: `--test` did not isolate DCUs** (resolves `T-8DCR`, present since v1.0). It passed `/p:DCC_UnitOutputDirectory`, a property the Delphi targets never read (`CodeGear.Delphi.Targets` uses `DCC_DcuOutput`), so the DCUs went to the project's real DCU folder — for `Packages290` projects the shared optset's `W:\DCU\290`, the canonical tree other packages and the slot baselines consume. Now `--test` passes `DCC_DcuOutput`, plus `DCC_ObjOutput`/`DCC_HppOutput` as workspace mode does: nothing of a `--test` build leaves `W:\temp\compilar\<PID>`.
