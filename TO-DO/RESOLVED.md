@@ -45,4 +45,20 @@ Tombstones for resolved TO-DO items (machine-readable; read by `agent-todo lint`
   title: '--test no aísla los DCU: pasa /p:DCC_UnitOutputDirectory (ignorado) en vez
     de DCC_DcuOutput y escribe en el DCU canónico'
   uid: delphi-compiler:T-8DCR
+- commit: '8305386'
+  note: 'v1.16: helper TProjectInfo.FindOutputFile (primero <Proyecto><sufijo><ext>,
+    después <Proyecto><ext>) usado en GetOutputFromMSBuild y en las ramas canónica,
+    --test y workspace de GetOutputPath. Verificado 2026-10-08 con una copia de MakerAiDsg
+    ({$LIBSUFFIX AUTO}) y salida a scratch, con un MakerAiDsg.bpl viejo (01-01) al
+    lado: v1.15 => output_locked, exit 1, output = el .bpl viejo, aunque MakerAiDsg290.bpl
+    acababa de reescribirse; v1.16 => ok, exit 0, output = MakerAiDsg290.bpl. Sin
+    regresión: --test sobre delphi-compiler.dproj (exe sin sufijo) => ok con su output;
+    --test sobre Terceros\MakerAI\MakerAiDsg.dproj => ok, output = W:\temp\compilar\<PID>\MakerAiDsg290.bpl;
+    con MakerAiDsg290.bpl abierto en exclusiva por otro proceso => error, exit 1,
+    F2039, output_stale (no da pass). Compilación de la v1.16: 0 errores, 0 warnings,
+    0 hints.'
+  resolved_at: '2026-10-08'
+  title: 'Falso output_locked con {$LIBSUFFIX}: se elige <Proyecto>.bpl viejo antes
+    que <Proyecto><sufijo>.bpl'
+  uid: delphi-compiler:T-Q4Q4
 <!-- agent-todo:resolved:end -->
