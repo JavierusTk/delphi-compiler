@@ -53,7 +53,7 @@ Events are executed via a temp `.bat` file (PID-unique name) in the project dire
 
 PostBuild rules (v1.13):
 
-- **Runs only after a real pass.** Before v1.13 the guard was `ErrorCount = 0`, so it also ran on `output_locked` and deployed a binary that run never wrote.
+- **Runs only after a real pass** (status `ok`/`hints`/`warnings`), not merely on `ErrorCount = 0`: an `output_locked` run has no compile errors yet wrote no binary, so its PostBuild would deploy a stale one.
 - **Never in workspace mode.** Outputs are redirected under `ROOT\out`, but the event was written for the canonical tree (absolute `W:\` paths; `$(...)` macros are NOT expanded by this tool). Running it would fail or copy a slot binary into the canonical tree. `cmx-workspace build` suppresses it too.
 - **Never with `--test`** (v1.14): same reason — the outputs go to a scratch folder and the event targets the real output.
 - **A defined event that does not run is reported**, never dropped: `"post_build_event": {"command", "skipped": true, "reason"}`.
@@ -109,14 +109,11 @@ One pass over every argument in `TArgsParser.Parse`, no positional assumptions:
 
 Callers key pass/fail on the exit code (or on `status`), **never** on `errors`
 alone — `invalid` and `internal_error` report `errors: 0` without a successful
-compile, and `output_locked` reports only the MSBuild lock error (`MSB3061`, since
-v1.14) or none: the sources were not compiled either way. Since v1.14 a failed
-MSBuild run is never a pass: MSBuild task errors (`MSBnnnn`) are issues, and a
-non-zero MSBuild exit with no recognized error line adds a synthetic
-`MSBUILD_EXIT` issue (before, `status: "ok"`/exit 0 with `exit_code: 1` in the
-JSON — `T-4Y7N`). Since v1.13 `postbuild_error` also exits `1` (the
-v1.9 note that it kept exit `0` described a status the code never emitted: a
-failed PostBuild left `status: "ok"`, a false green).
+compile, and `output_locked` reports only the MSBuild lock error (`MSB3061`) or
+none: the sources were not compiled either way. A failed MSBuild run is never a
+pass: MSBuild task errors (`MSBnnnn`) are issues, and a non-zero MSBuild exit
+with no recognized error line adds a synthetic `MSBUILD_EXIT` issue. A failed
+PostBuild is `postbuild_error`, exit `1`. When each rule landed: `CHANGELOG.md`.
 
 ## JSON Output Status Values
 
