@@ -3,4 +3,5 @@
 Índice de TODOS los items presentes en el registro (resolver un item borra su fichero), anotados con su status. Generado por `agent-todo reindex` (no editar a mano entre los marcadores).
 
 <!-- agent-todo:index:start -->
+- [delphi-compiler:T-DBZ4] `sin status` — delphi-compiler da verde (exit 0) a un .dproj sin units: MSBuild no compila nada y no avisa
 <!-- agent-todo:index:end -->
