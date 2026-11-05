@@ -4,5 +4,6 @@
 
 <!-- agent-todo:index:start -->
 - [delphi-compiler:T-DBZ4] `sin status` — delphi-compiler da verde (exit 0) a un .dproj sin units: MSBuild no compila nada y no avisa
+- [delphi-compiler:T-HF2B] `sin status` — En un slot, una bateria de tests puede enlazar el DCP canonico y dar falso verde sin aviso
 - [delphi-compiler:T-T43S] `sin status` — delphi-compiler da F2039 por el .map bloqueado por la app viva como error de fuente, no bloqueo
 <!-- agent-todo:index:end -->
